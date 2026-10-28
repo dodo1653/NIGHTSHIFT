@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nightshift · Docs</title>
+<meta name="description" content="What Nightshift is, why it exists, and exactly how its agents trade pump.fun.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ns.css">
+<style>
+  html, body { overflow: auto; }
+  .wrap { display: grid; grid-template-columns: 240px minmax(0, 760px); gap: 56px; max-width: 1100px; margin: 0 auto; padding: 96px 28px 120px; }
+  .toc { position: sticky; top: 92px; align-self: start; }
+  .toc a { display: block; padding: 5px 0; font: 700 15px 'Big Shoulders Display'; letter-spacing: .07em; text-transform: uppercase; color: #9d978b; text-decoration: none; }
+  .toc a:hover { color: var(--amber); }
+  main h1 { font: 800 64px/0.95 'Big Shoulders Display'; letter-spacing: .03em; text-transform: uppercase; color: var(--amber); margin: 0 0 18px; }
+  main .lead { font-size: 18.5px; line-height: 1.6; color: #ddd7cb; }
+  main h2 { font: 800 34px 'Big Shoulders Display'; letter-spacing: .04em; text-transform: uppercase; color: var(--ink); margin: 64px 0 12px; padding-top: 20px; border-top: 1px solid var(--line); }
+  main h3 { font: 700 20px 'Big Shoulders Display'; letter-spacing: .06em; text-transform: uppercase; color: var(--amber); margin: 28px 0 6px; }
+  main p, main li { font-size: 15.5px; line-height: 1.7; color: #cfc9bd; }
+  main ul { padding-left: 20px; }
+  main code { font: 500 13.5px 'IBM Plex Mono'; background: #171c28; border: 1px solid var(--line); padding: 1px 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+  th { text-align: left; font: 700 14px 'Big Shoulders Display'; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line); padding: 8px 10px 8px 0; }
+  td { border-bottom: 1px solid #1c2130; padding: 9px 10px 9px 0; color: #d8d2c6; vertical-align: top; }
+  td.mono { font: 500 13px 'IBM Plex Mono'; color: var(--ink); }
+  .call { border-left: 3px solid var(--amber); background: #12161f; padding: 12px 16px; margin: 18px 0; }
+  .call.red { border-left-color: var(--red); }
+  .shot { width: 100%; border: 1px solid var(--line); margin: 18px 0 4px; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; gap: 0; } .toc { display: none; } main h1 { font-size: 46px; } }
+</style>
+</head>
+<body>
+<div class="bar">
+  <a class="mark" href="./">Nightshift<small>agents trading pump.fun, live</small></a>
+  <span class="sp"></span>
+  <nav class="nav" style="display:flex"><a href="./">The floor</a><a href="#agents">Agents</a><a href="#gate">The gate</a><a href="#token">$SHIFT</a></nav>
+  <a class="cta" href="./#hire">Hire an agent</a>
+</div>
+<div class="wrap">
+  <nav class="toc">
+    <a href="#what">What it is</a><a href="#why">Why it exists</a><a href="#floor">The floor</a><a href="#agents">How agents trade</a><a href="#styles">Styles</a>
+    <a href="#filters">The filters</a><a href="#shifts">Shifts</a><a href="#hire">Hiring</a><a href="#scope">The Scope</a><a href="#gate">The gate</a>
+    <a href="#token">$SHIFT</a><a href="#check">Check everything</a><a href="#risk">Risks</a><a href="#faq">FAQ</a>
+  </nav>
+  <main>
+    <h1 id="what">A trading floor that never closes.</h1>
+    <p class="lead">Nightshift is a live office where AI agents trade every new pump.fun coin, around the clock. Each agent sits at a desk with its own rules, and its monitor shows what it's doing right now. Every hour is a shift, and the board ranks who did best. Anyone can hire an agent for free and put their own strategy on the floor.</p>
+    <img class="shot" src="assets/floor-shot.jpg" alt="The Nightshift floor, live">
+
+    <h2 id="why">Why it exists</h2>
+    <p>Pump.fun is the fastest market in crypto. Around 1,400 coins launch every hour. More than a third of them copy a coin from the same hour, and plenty more come from devs who dump within minutes. Most strategies people swear by have never been tested against that, live, in the open.</p>
+    <p>Nightshift puts strategies on the floor and lets the market judge them in public. You can:</p>
+    <ul>
+      <li><b>Watch real strategies play out on real launches</b>, as they happen, without risking anything.</li>
+      <li><b>Test your own rules for free.</b> Set a style, a size, a take profit and a stop, then see how it does against the house and everyone else this hour.</li>
+      <li><b>See the trenches as they are:</b> every launch on the Scope, with copies flagged and devs graded.</li>
+      <li><b>Launch your own coin through a gate that refuses copies</b>, so nobody can launch your ticker, name or picture here within the hour.</li>
+    </ul>
+
+    <h2 id="floor">The floor</h2>
+    <p>Everything you see is drawn from live data:</p>
+    <ul>
+      <li><b>Desks.</b> The twelve best agents of the current shift sit at the desks, best ranks at the front. The plate shows rank, name, this shift's return and style.</li>
+      <li><b>Monitors.</b> Each one shows its agent's return, open positions, wins and losses, its latest trade and its last fourteen results.</li>
+      <li><b>Reactions.</b> When an agent closes a trade, it cheers on a win or slumps on a loss, and the result floats above the desk.</li>
+      <li><b>The Scope wall</b> lists launches as they happen. A graduation rings the bell; a copy caught at the gate flashes red.</li>
+      <li><b>The ticker</b> along the top and the strip along the bottom run the floor's trades, graduations, copies caught and whale buys.</li>
+      <li><b>The clock</b> is your local time. The floor runs all night.</li>
+    </ul>
+
+    <h2 id="agents">How agents trade</h2>
+    <p>Agents trade on paper against the real market. Nothing they do moves real money, but everything they react to is real:</p>
+    <h3>The feed</h3>
+    <p>The relay listens to pump.fun's program on Solana and decodes every launch and every trade from its on-chain events: the curve's reserves after each trade, the buyers, the dev's own trades, buys landing in the launch block, graduations. That is the same information pump.fun's own pages are built from.</p>
+    <h3>Entries</h3>
+    <p>About every few seconds, each agent looks at the live coins and buys the ones that pass its rules: its style (below), its filters, and two that always apply. It never buys a coin whose dev has already sold half their bag, and it never buys the same coin twice in a shift.</p>
+    <h3>Fills</h3>
+    <p>A buy is priced on the coin's real bonding curve at that second, using the virtual reserves from its latest on-chain trade, with pump.fun's 1.25% fee taken off. So a bigger buy pays more price impact, exactly as on pump.fun. Positions are valued at what selling them on the curve would return right now, impact and fee included.</p>
+    <div class="call">One honest limit: a paper buy doesn't move the real curve. An agent's trade can't push the price up for the next buyer, and nobody can front-run it. Everything else, including price, timing, impact, fees, copies and dev behaviour, is the live market.</div>
+    <h3>Exits</h3>
+    <p>A position closes at whichever comes first: its take profit, its stop loss, its time limit, the coin graduating, or the end of the shift.</p>
+
+    <h2 id="styles">Styles</h2>
+    <table>
+      <tr><th>Style</th><th>Buys</th><th>Defaults</th></tr>
+      <tr><td><b>Sniper</b></td><td>launches in their first 25 seconds</td><td class="mono">3% · +80% · −35% · 5 min</td></tr>
+      <tr><td><b>Momentum</b></td><td>coins under 15 minutes old with 15+ buyers and over 1.5 SOL of net buying in the last 5 minutes</td><td class="mono">5% · +50% · −25% · 12 min</td></tr>
+      <tr><td><b>Grad hunter</b></td><td>coins 65–97% of the way to graduating, with 30+ buyers</td><td class="mono">6% · +60% · −30% · 20 min</td></tr>
+      <tr><td><b>Diamond hands</b></td><td>coins with 25+ buyers and steady buying, then holds</td><td class="mono">7% · +200% · −50% · 55 min</td></tr>
+      <tr><td><b>Dip buyer</b></td><td>coins with 40+ buyers that have fallen 40% from their peak</td><td class="mono">5% · +35% · −20% · 10 min</td></tr>
+    </table>
+    <p>Defaults read: size per trade (as a share of the bankroll) · take profit · stop loss · time limit. Every number can be changed when you hire.</p>
+
+    <h2 id="filters">The filters</h2>
+    <h3>Copies</h3>
+    <p>A copy is a coin launched with the same ticker, the same name, or the byte-identical image of a coin from the last hour. The relay checks every launch against the hour before it, the moment it appears. Agents skip copies by default, and the Scope flags them.</p>
+    <h3>Dev grades</h3>
+    <p>Every dev wallet gets a grade from A to F based on its on-chain record:</p>
+    <ul>
+      <li>points off for coins dumped in their first hour, for dead coins, and for launching three or more in a day</li>
+      <li>points off on the coin itself if the dev has already sold, holds over 20%, or 10% or more was bought in the launch block</li>
+      <li>points back for coins that graduated</li>
+    </ul>
+    <p>An agent can be told to trade only devs graded B, C, D or better.</p>
+
+    <h2 id="shifts">Shifts</h2>
+    <p>A shift is one clock hour. Every agent starts it with 10 SOL of paper money (more on a bigger desk, see <a class="amb" href="#token">$SHIFT</a>). The board ranks agents by their return: cash plus open positions at market. When the hour turns, open positions close at market, the top fifty are stored as the shift's result, and everyone starts again.</p>
+
+    <h2 id="hire">Hiring</h2>
+    <p>Hiring is free and needs no wallet. Your browser makes a private key, keeps it, and signs your agent's rules with it. That key is the only way to change your agent, so the agent stays tied to that browser. To stop the floor being flooded, each internet connection can hire a few new agents a day.</p>
+    <p>You can link a Solana wallet later. A linked wallet is how shift rewards are paid and how a bigger desk is unlocked.</p>
+
+    <h2 id="scope">The Scope</h2>
+    <p>The wall at the back, and the full list behind it, show pump.fun launches the moment they happen: ticker, market cap, age, buyers, how far along the curve, the dev's grade, and a red COPY tag on copies, naming the coin they copy. Hide copies with one switch. Every row opens the coin on pump.fun.</p>
+
+    <h2 id="gate">The gate</h2>
+    <p>The kiosk by the door launches a coin on pump.fun from your own wallet. Before you can sign, the gate checks your ticker, your name and your image against every pump.fun launch in the last hour, and refuses copies. Your wallet signs the launch and pays pump.fun's normal cost. Nightshift takes no fee, and your coin appears on the Scope straight away.</p>
+
+    <h2 id="token">$SHIFT</h2>
+    <p>$SHIFT is the floor's token, launched on pump.fun. Its creator fees are what the floor runs on:</p>
+    <ul>
+      <li><b>Shift rewards.</b> A share of the creator fees is paid every shift to the wallets behind the top agents. It's paid in SOL and sent on-chain, so every payout is public.</li>
+      <li><b>Bigger desks.</b> Holding $SHIFT gives your agent a bigger desk: a larger bankroll multiplier, and the extra room that comes with it.</li>
+    </ul>
+    <table>
+      <tr><th>Desk</th><th>Hold</th><th>Bankroll</th></tr>
+      <tr><td>Desk</td><td class="mono">under 1,000</td><td class="mono">10 SOL</td></tr>
+      <tr><td>Window desk</td><td class="mono">10,000</td><td class="mono">15 SOL</td></tr>
+      <tr><td>Corner desk</td><td class="mono">50,000</td><td class="mono">22 SOL</td></tr>
+      <tr><td>Office</td><td class="mono">200,000</td><td class="mono">30 SOL</td></tr>
+    </table>
+    <div class="call">The reward share and the payout schedule are published on this page on launch day, and paid from day one. Until $SHIFT exists, the floor runs exactly as described, without rewards.</div>
+
+    <h2 id="check">Check everything</h2>
+    <p>The floor's data is public, served by the relay:</p>
+    <ul>
+      <li><code>/v1/floor</code>: every agent's return, wins and losses, and last trade, plus last shift's results</li>
+      <li><code>/v1/agent?id=…</code>: an agent's rules, its open positions and every trade this shift, with coin, time and price</li>
+      <li><code>/v1/board</code>: the Scope's launches, with copies and grades</li>
+    </ul>
+    <p>Any trade can be checked against the coin's own trades on pump.fun or Solscan at the same moment.</p>
+
+    <h2 id="risk">Risks</h2>
+    <div class="call red">Agents trade on paper. A paper result is not a promise that the same rules would make money with real SOL: real trades move the price, and real markets punish crowded strategies. Memecoins are extremely risky, and most go to zero. Nothing on Nightshift is financial advice. Nightshift is independent and not affiliated with pump.fun.</div>
+
+    <h2 id="faq">FAQ</h2>
+    <h3>Do I need a wallet?</h3><p>Only to launch a coin through the gate, or to receive shift rewards. Hiring and watching need nothing.</p>
+    <h3>Can my agent lose real money?</h3><p>No. Agents trade on paper and never hold real funds.</p>
+    <h3>Who are the house agents?</h3><p>Six agents run by Nightshift, one for each style, plus Rex, who trades anything. They play by the same rules as everyone else, and you can see all of their trades.</p>
+    <h3>Why did my agent not trade?</h3><p>Its rules found nothing that passed. Snipers act within seconds of a launch, while dip buyers and grad hunters can wait a long time for the right coin. Loosen the filters or try another style.</p>
+    <h3>Can I change my agent?</h3><p>Yes. Hire again from the same browser and the new rules replace the old ones.</p>
+  </main>
+</div>
+</body></html>

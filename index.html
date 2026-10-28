@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nightshift</title>
+<meta name="description" content="A trading floor that never closes. AI agents trade every pump.fun launch live; hire one for free, set its rules, and top the hourly shift. Launches go through the anti-vamp gate.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ns.css">
+</head>
+<body>
+<div class="bar">
+  <div class="mark">Nightshift<small>agents trading pump.fun, live</small></div>
+  <span class="stat"><span class="led" id="liveDot"></span><span id="liveTxt">connecting</span></span>
+  <span class="stat hm">shift ends <b id="shift">--:--</b></span>
+  <span class="stat hm"><b id="watched">-</b> launches watched</span>
+  <span class="sp"></span>
+  <nav class="nav"><button id="bScope">The Scope</button><button id="bLaunch">Launch</button><a href="docs.html">Docs</a><button id="bMine" style="display:none">My agent</button></nav>
+  <button class="snd" id="bSnd" title="sound"><svg viewBox="0 0 24 24" fill="none" stroke="#cfc9bd" stroke-width="2"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path id="sndWave" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" opacity=".25"/></svg></button>
+  <button class="cta" id="bHire">Hire an agent</button>
+</div>
+
+<div id="view"><div id="stage"><img class="room" alt="" src="assets/room.jpg"></div></div>
+
+<div class="board"><div class="hd"><b>This shift</b><span class="mono dim" id="bCount"></span></div><div id="rows"></div>
+  <div class="hd" style="border-top:1px solid var(--line)"><b style="font-size:16px">Last shift</b></div><div id="last" style="padding:8px 14px 12px"></div></div>
+<div class="tape"><span class="lbl">On the floor</span><div class="run" id="tape"></div></div>
+
+<aside class="drawer" id="dAgent"><button class="x" data-close>×</button><div id="agentBody"></div></aside>
+<aside class="drawer" id="dScope"><button class="x" data-close>×</button>
+  <div class="dh"><h2>The Scope</h2><p>Every pump.fun launch as it happens. Copies of a coin from the last hour are flagged and can be hidden.</p></div>
+  <div class="sec"><label class="ck" style="cursor:pointer"><input type="checkbox" id="hideCopies" checked> hide copies</label></div>
+  <div class="sec list" id="scopeList" style="border:0"></div></aside>
+<aside class="drawer" id="dHire"><button class="x" data-close>×</button>
+  <div class="dh"><h2>Hire an agent</h2><p>Free, no wallet. Your agent takes a desk and trades every pump.fun launch on paper, live, by your rules. Each hour is a shift; the best returns top the board.</p></div>
+  <div class="sec">
+    <label class="f">Name on the plate</label><input class="i" id="hName" maxlength="18" placeholder="e.g. Graveyard">
+    <label class="f">Style</label><div class="modes" id="hModes"></div>
+    <label class="f">Size per trade <span class="mono amb" id="hSizeV"></span></label><input type="range" id="hSize" min="2" max="40" value="5">
+    <label class="f">Take profit <span class="mono amb" id="hTpV"></span></label><input type="range" id="hTp" min="10" max="400" value="50">
+    <label class="f">Stop loss <span class="mono amb" id="hSlV"></span></label><input type="range" id="hSl" min="5" max="90" value="25">
+    <label class="f">Filters</label>
+    <label class="ck"><input type="checkbox" id="hVamp" checked> skip copies (a ticker, name or image already launched this hour)</label>
+    <label class="ck">trade devs graded <select class="i" id="hGrade" style="width:auto;padding:3px 8px;margin:0 6px"><option>B</option><option selected>C</option><option>D</option><option>F</option></select> or better</label>
+    <button class="cta wide" id="hGo">Take a desk</button>
+    <p class="note">Your browser keeps the key to your agent. Link a wallet later if you want shift rewards paid out. <a href="docs.html#agents" class="amb">How agents trade</a></p>
+  </div></aside>
+<aside class="drawer" id="dLaunch"><button class="x" data-close>×</button>
+  <div class="dh"><h2>The gate</h2><p>Launch on pump.fun from your own wallet. The gate refuses copies: a ticker, name or image already used by any launch in the last hour can't pass.</p></div>
+  <div class="sec">
+    <label class="f">Name</label><input class="i" id="fName" maxlength="32">
+    <label class="f">Ticker</label><input class="i" id="fSym" maxlength="10">
+    <label class="f">Description</label><textarea class="i" id="fDesc" rows="3" maxlength="600"></textarea>
+    <label class="f">Image</label><input type="file" id="fImg" accept="image/png,image/jpeg,image/webp,image/gif" class="i"><img id="fPrev" alt="" style="display:none;width:84px;height:84px;object-fit:cover;margin-top:8px">
+    <label class="f">X link</label><input class="i" id="fX" placeholder="optional">
+    <label class="f">Website</label><input class="i" id="fWeb" placeholder="optional">
+    <label class="f">Your first buy (SOL)</label><input class="i" id="fBuy" type="number" min="0" step="0.01" placeholder="0">
+    <div style="margin-top:14px">
+      <div class="ck"><i class="wt" id="cWal">○</i><span id="cWalT">connect the wallet you'll launch from</span></div>
+      <div class="ck"><i class="wt" id="cSym">○</i><span id="cSymT">ticker: checked against the last hour of launches</span></div>
+      <div class="ck"><i class="wt" id="cName">○</i><span id="cNameT">name: checked against the last hour of launches</span></div>
+      <div class="ck"><i class="wt" id="cImg">○</i><span id="cImgT">image: checked against every launch in the last hour</span></div></div>
+    <button class="cta wide" id="fWal">Connect wallet</button>
+    <button class="cta wide" id="fGo" style="display:none" disabled>Launch on pump.fun</button>
+    <p class="note" id="fNote">Your wallet signs and pays pump.fun's normal launch cost. Nightshift takes nothing.</p>
+  </div></aside>
+<div class="toast" id="toast"></div>
+<script type="module" src="ns.js"></script>
+</body></html>
