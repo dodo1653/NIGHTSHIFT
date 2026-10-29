@@ -10,8 +10,10 @@ const RELAY = Q.get('relay')
 let relayBase = RELAY ? Promise.resolve(RELAY) : fetch('/api/r?path=where').then((r) => r.json()).then((j) => j.base).catch(() => '')
 const get = (p, q = '') => fetch(RELAY ? `${RELAY}/v1/${p}?${q}` : `/api/r?path=${p}&${q}`, { cache: 'no-store' }).then((r) => r.json())   // reads go through the edge cache
 const post = async (p, b) => {
-  const url = p === 'hire' ? `${await relayBase}/v1/hire` : RELAY ? `${RELAY}/v1/${p}` : `/api/r?path=${p}`
-  return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json())
+  const send = (url) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json())
+  if (RELAY) return send(`${RELAY}/v1/${p}`)
+  if (p === 'hire') { const base = await relayBase; if (base) { try { return await send(`${base}/v1/hire`) } catch {} } }
+  return send(`/api/r?path=${p}`)      // through the site (hiring too, if the relay can't be reached directly)
 }
 const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? Math.floor(s) + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h' }
 const pct = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%'

@@ -169,7 +169,7 @@ export function createRelay({ rpcUrl, openSocket, store, publicUrl, siteUrl = "h
     if (u.pathname === "/v1/modes") return json({ modes: floor.modes, house: floor.house })
     if (u.pathname === "/v1/hire" && req.method === "POST") {
       let b; try { b = await req.json() } catch { return json({ error: "bad json" }, 400) }
-      try { return json(await floor.hire({ ...b, ip: req.headers.get("cf-connecting-ip") || req.headers.get("x-forwarded-for") || "" })) } catch (e) { return json({ error: String(e.message || e) }, 400) }
+      try { return json(await floor.hire({ ...b, ip: req.headers.get("x-visitor-ip") || req.headers.get("cf-connecting-ip") || req.headers.get("x-forwarded-for") || ""   // x-visitor-ip: set by the site's proxy })) } catch (e) { return json({ error: String(e.message || e) }, 400) }
     }
     if (u.pathname === "/v1/board") {
       const n = Math.min(120, +(u.searchParams.get("n") || 80)), rows = []
