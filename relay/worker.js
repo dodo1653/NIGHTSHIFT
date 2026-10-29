@@ -17,7 +17,7 @@ export class Relay extends DurableObject {
     const storage = ctx.storage
     this.relay = createRelay({
       rpcUrl: env.RPC_URL,
-      publicUrl: env.PUBLIC_URL || "https://nightshift-relay.vetted-relay.workers.dev",
+      publicUrl: env.PUBLIC_URL || "https://nightshift-floor.vercel.app",
       siteUrl: env.SITE_URL || undefined,
       store: { get: (k) => storage.get(k), put: (k, v) => storage.put(k, v) },
       openSocket: (onOpen, onMsg, onClose) => {

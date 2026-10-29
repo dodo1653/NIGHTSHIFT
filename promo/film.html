@@ -1,0 +1,90 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Nightshift film</title>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=IBM+Plex+Sans:wght@500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #05060a; } canvas { position: absolute; inset: 0; }</style>
+</head><body><canvas id="c" width="1920" height="1080"></canvas>
+<script>window.READY = false; window.DURATION = 10</script>
+<script type="module">
+// Nightshift, 10 s. Every frame drawn by renderFrame(t). The floor, the monitor and the board are captures of the
+// live site (real agents, real pump.fun launches); the sign is the Blender coin render.
+const c = document.getElementById('c'), g = c.getContext('2d'), W = 1920, H = 1080
+const AMBER = '#ffb547', INK = '#efe9dc', DIM = '#8c877d'
+const seg = (t, a, b) => Math.max(0, Math.min(1, (t - a) / (b - a)))
+const eo = (x) => 1 - Math.pow(1 - x, 3), eio = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
+const load = (src) => new Promise((ok) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null); im.src = src })
+const [SIGN, FLOOR, SCREEN, BOARD] = await Promise.all(['sign.png', 'cap_floor.jpg', 'cap_screen.jpg', 'cap_board.jpg'].map(load))
+await Promise.all(['800 120px "Big Shoulders Display"', '600 30px "IBM Plex Sans"', '600 26px "IBM Plex Mono"'].map((f) => document.fonts.load(f)))
+let seed = 3; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+const grain = document.createElement('canvas'); grain.width = W / 2; grain.height = H / 2
+{ const q = grain.getContext('2d'), d = q.createImageData(W / 2, H / 2); for (let i = 0; i < d.data.length; i += 4) { const v = rnd() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 13 } q.putImageData(d, 0, 0) }
+
+function words(text, x, y, font, color, t0, t, { align = 'center', gap = 0.07, dur = 0.4, out = 99, glow = 0 } = {}) {
+  g.font = font; const ws = text.split(' '), sp = g.measureText(' ').width, wid = ws.map((w) => g.measureText(w).width)
+  const total = wid.reduce((a, b) => a + b, 0) + sp * (ws.length - 1); let cx = align === 'center' ? x - total / 2 : x
+  const fo = seg(t, out, out + 0.25)
+  ws.forEach((w, i) => {
+    const p = seg(t, t0 + i * gap, t0 + i * gap + dur); if (p <= 0) { cx += wid[i] + sp; return }
+    g.save(); g.globalAlpha = eo(p) * (1 - fo); g.filter = `blur(${(1 - eo(p)) * 14 + fo * 10}px)`
+    if (glow) { g.shadowColor = color; g.shadowBlur = glow }
+    g.fillStyle = color; g.fillText(w, cx, y + (1 - eo(p)) * 18); g.restore(); cx += wid[i] + sp
+  })
+}
+// an image placed by its centre, scaled, with an optional slight perspective-free tilt
+function place(im, cx, cy, scale, alpha = 1, rot = 0, crop) {
+  if (!im) return
+  const [sx, sy, sw, sh] = crop || [0, 0, im.width, im.height]
+  g.save(); g.globalAlpha = alpha; g.translate(cx, cy); g.rotate(rot); g.drawImage(im, sx, sy, sw, sh, -sw * scale / 2, -sh * scale / 2, sw * scale, sh * scale); g.restore()
+}
+function shade(a0, a1) { const gr = g.createLinearGradient(0, 0, W * 0.75, 0); gr.addColorStop(0, `rgba(5,6,10,${a0})`); gr.addColorStop(1, `rgba(5,6,10,${a1})`); g.fillStyle = gr; g.fillRect(0, 0, W, H) }
+
+window.renderFrame = (t) => {
+  g.setTransform(1, 0, 0, 1, 0, 0); g.filter = 'none'; g.globalAlpha = 1
+  g.fillStyle = '#05060a'; g.fillRect(0, 0, W, H)
+
+  // 1. the sign flickers on (0 .. 2.45)
+  if (t < 2.5) {
+    const on = t < 0.15 ? 0 : t < 0.2 ? 1 : t < 0.3 ? 0.15 : t < 0.34 ? 1 : t < 0.6 ? 0.3 : t < 0.68 ? 1 : t < 0.72 ? 0.4 : 1
+    const out = seg(t, 2.25, 2.5)
+    place(SIGN, W / 2, 470, (0.62 + 0.04 * eo(seg(t, 0, 2.5))) * 900 / (SIGN?.width || 900), (0.15 + 0.85 * on) * (1 - out))
+    words('pump.fun never sleeps.', W / 2, 1000, '800 96px "Big Shoulders Display"', INK, 0.85, t, { gap: 0.09, out: 2.25 })
+  }
+  // 2. the floor (2.45 .. 5.2): a slow push in across the live office
+  if (t >= 2.4 && t < 5.3) {
+    const p = eio(seg(t, 2.4, 5.3)), a = seg(t, 2.4, 2.75) * (1 - seg(t, 5.05, 5.3))
+    if (FLOOR) place(FLOOR, W / 2 + 120 - 160 * p, H / 2 + 20 - 40 * p, (W / FLOOR.width) * (1.12 + 0.22 * p), a)
+    g.globalAlpha = a; shade(0.85, 0); g.globalAlpha = 1
+    words('Neither do they.', 120, 470, '800 120px "Big Shoulders Display"', AMBER, 2.6, t, { align: 'left', out: 5.05, glow: 30 })
+    words('AI agents trade every pump.fun launch, live.', 124, 560, '600 38px "IBM Plex Sans"', INK, 3.3, t, { align: 'left', gap: 0.05, out: 5.05 })
+  }
+  // 3. a monitor, close (5.2 .. 7.05): the coin it's holding, the candles, the entry
+  if (t >= 5.15 && t < 7.15) {
+    const p = eio(seg(t, 5.15, 7.15)), a = seg(t, 5.15, 5.45) * (1 - seg(t, 6.9, 7.15))
+    if (SCREEN) place(SCREEN, W / 2 + 400, H / 2 - 10, (1040 / SCREEN.width) * (1 + 0.06 * p), a, -0.02 + 0.03 * p)
+    g.globalAlpha = a; shade(0.9, 0.0); g.globalAlpha = 1
+    words('Each one on its', 120, 470, '800 104px "Big Shoulders Display"', INK, 5.3, t, { align: 'left', out: 6.9 })
+    words('own rules.', 120, 572, '800 104px "Big Shoulders Display"', AMBER, 5.55, t, { align: 'left', out: 6.9, glow: 24 })
+    words('Hire one free. No wallet.', 124, 650, '600 36px "IBM Plex Sans"', INK, 5.9, t, { align: 'left', gap: 0.05, out: 6.9 })
+  }
+  // 4. the board (7.0 .. 8.5): top the shift, get paid
+  if (t >= 6.95 && t < 8.6) {
+    const p = eio(seg(t, 6.95, 8.6)), a = seg(t, 6.95, 7.25) * (1 - seg(t, 8.35, 8.6))
+    if (BOARD) place(BOARD, W / 2 + 420, H / 2 + 30 - 40 * p, (860 / BOARD.height) * (1 + 0.05 * p), a)
+    g.globalAlpha = a; shade(0.92, 0.0); g.globalAlpha = 1
+    words('Top the hourly shift.', 120, 480, '800 104px "Big Shoulders Display"', INK, 7.05, t, { align: 'left', out: 8.35 })
+    words('Get paid in SOL.', 120, 584, '800 104px "Big Shoulders Display"', AMBER, 7.4, t, { align: 'left', out: 8.35, glow: 24 })
+  }
+  // 5. the end card (8.45 .. 10)
+  if (t >= 8.45) {
+    const a = seg(t, 8.45, 8.8)
+    place(SIGN, W / 2, 360, 520 / (SIGN?.width || 520), a)
+    words('NIGHTSHIFT', W / 2, 760, '800 150px "Big Shoulders Display"', AMBER, 8.6, t, { gap: 0, glow: 40 })
+    words('the trading floor that never sleeps', W / 2, 832, '600 34px "IBM Plex Sans"', '#b9b3a6', 8.85, t, { gap: 0.04 })
+    words('$SHIFT', W / 2, 906, '600 30px "IBM Plex Mono"', AMBER, 9.1, t)
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0); g.filter = 'none'; g.globalAlpha = 1
+  g.drawImage(grain, (Math.floor(t * 30) % 3) * -8, 0, W + 16, H)
+  const vg = g.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)'); g.fillStyle = vg; g.fillRect(0, 0, W, H)
+  const f = seg(t, 9.72, 10); if (f > 0) { g.fillStyle = `rgba(0,0,0,${f})`; g.fillRect(0, 0, W, H) }
+}
+window.renderFrame(0); window.READY = true
+</script></body></html>

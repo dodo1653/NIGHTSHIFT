@@ -10,9 +10,27 @@ ART = os.path.join(os.path.dirname(__file__), "out")
 SITE = os.path.join(os.path.dirname(__file__), "..", "assets")
 os.makedirs(SITE, exist_ok=True)
 
+SPRITE_BOX = (240, 840, 800, 1240)   # floor_scene.py renders every seat sprite inside this box
+_fade = {}
+def fade_mask(size, box, edge=70):
+    # soft shadows reach the render border: fade them to nothing over the last `edge` pixels so no box shows
+    key = (size, box)
+    if key not in _fade:
+        from PIL import ImageDraw, ImageFilter
+        m = Image.new("L", size, 0); ImageDraw.Draw(m).rectangle((box[0] + edge, box[1] + edge, box[2] - edge, box[3] - edge), fill=255)
+        _fade[key] = m.filter(ImageFilter.GaussianBlur(edge / 2.2))
+    return _fade[key]
+
 def load(f):
     im = Image.open(os.path.join(ART, f)).convert("RGBA")
-    a = im.getchannel("A").point(lambda v: 0 if v < 10 else v)
+    a = im.getchannel("A")
+    if not f.startswith("walk"):
+        from PIL import ImageChops
+        # keep solid pixels as they are; only faint shadow (alpha under 90) is faded toward the border
+        m = fade_mask(im.size, SPRITE_BOX)
+        faded = ImageChops.multiply(a, m)
+        a = Image.composite(a, faded, a.point(lambda v: 255 if v >= 90 else 0))
+    a = a.point(lambda v: 0 if v < 10 else v)
     im.putalpha(a)
     return im
 

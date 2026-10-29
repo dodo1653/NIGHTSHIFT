@@ -1,8 +1,8 @@
 /* Nightshift: night-office signage. Big Shoulders for signs and plates, IBM Plex for reading and figures, one neon amber. */
 :root { --bg: #0b0f1a; --ink: #ece7dc; --dim: #8d8a83; --line: #2a2f3c; --panel: #11151f; --panel2: #171c28; --amber: #ffb547; --amber2: #e8962a; --grn: #6fe39b; --red: #ff7a6b; --blue: #8fb6ff; }
 * { box-sizing: border-box; }
-html { background: var(--bg); }
-html, body { margin: 0; height: 100%; background: transparent; color: var(--ink); font: 400 14px/1.5 'IBM Plex Sans', sans-serif; overflow: hidden; }
+html { background: var(--bg); } body { background: transparent; }
+html, body { margin: 0; height: 100%; color: var(--ink); font: 400 14px/1.5 'IBM Plex Sans', sans-serif; overflow: hidden; }
 body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: radial-gradient(1000px 600px at 45% 40%, #18203a 0%, rgba(11,15,26,0) 70%); pointer-events: none; }
 button { font: inherit; color: inherit; cursor: pointer; }
 a { color: inherit; }
@@ -104,3 +104,42 @@ input[type=range] { width: 100%; accent-color: var(--amber); }
 .toast { position: fixed; left: 50%; bottom: 62px; transform: translate(-50%, 20px); opacity: 0; z-index: 90; padding: 10px 16px; background: #1a1f2c; border: 1px solid var(--line); border-left: 3px solid var(--amber); transition: .25s; max-width: 90vw; }
 .toast.on { opacity: 1; transform: translate(-50%, 0); } .toast.bad { border-left-color: var(--red); }
 @media (max-width: 900px) { .board { display: none; } .stat.hm { display: none; } .nav { display: none; } }
+
+/* the opening: the live floor behind, the pitch on the left; "Watch the floor" lifts it */
+.intro { position: fixed; inset: 60px 0 44px 0; z-index: 40; display: flex; align-items: center; padding: 0 6vw; background: linear-gradient(90deg, rgba(7,9,16,.96) 0%, rgba(7,9,16,.9) 34%, rgba(7,9,16,.45) 58%, rgba(7,9,16,0) 78%); transition: opacity .6s ease, visibility .6s; }
+.intro.off { opacity: 0; visibility: hidden; pointer-events: none; }
+.intro .in { max-width: 600px; }
+.intro .eyebrow { display: flex; align-items: center; gap: 10px; font: 500 12.5px 'IBM Plex Mono'; letter-spacing: .12em; text-transform: uppercase; color: var(--amber); }
+.intro h1 { font: 800 clamp(64px, 8.6vw, 132px)/.86 'Big Shoulders Display'; text-transform: uppercase; letter-spacing: .005em; margin: 18px 0 0; color: var(--ink); }
+.intro h1 span { color: var(--amber); text-shadow: 0 0 34px rgba(255,181,71,.35); }
+.intro p { font-size: 17.5px; line-height: 1.6; color: #c9c4b9; margin: 22px 0 0; max-width: 540px; } .intro p b { color: var(--amber); }
+.intro .row2 { display: flex; gap: 10px; margin-top: 28px; }
+.cta.big { font-size: 19px; padding: 13px 24px; }
+.ghost { font: 800 19px 'Big Shoulders Display'; letter-spacing: .08em; text-transform: uppercase; padding: 12px 22px; border: 1px solid #3a3f4c; background: rgba(255,255,255,.03); color: var(--ink); border-radius: 2px; }
+.ghost:hover { border-color: var(--amber); color: var(--amber); }
+.ichips { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 30px; font: 500 13px 'IBM Plex Mono'; color: #9c978d; } .ichips b { color: var(--ink); font-weight: 600; }
+.ca { display: flex; align-items: center; gap: 12px; margin-top: 22px; padding: 8px 8px 8px 14px; border: 1px solid #2f3442; background: rgba(13,16,24,.9); color: var(--ink); max-width: 100%; }
+.ca span { font: 800 15px 'Big Shoulders Display'; letter-spacing: .06em; color: var(--amber); } .ca code { font: 500 13px 'IBM Plex Mono'; color: #cfc9bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ca b { font: 800 13px 'Big Shoulders Display'; letter-spacing: .08em; text-transform: uppercase; background: var(--amber); color: #1c1203; padding: 5px 10px; }
+@media (max-width: 900px) { .intro { background: rgba(7,9,16,.9); padding: 0 22px; } .intro p { font-size: 15.5px; } }
+
+/* v2 chrome: glass panels, softer edges, more air (overrides the first pass above) */
+.bar { background: rgba(9,11,17,.78); backdrop-filter: blur(16px) saturate(140%); border-bottom: 1px solid rgba(255,255,255,.06); }
+.cta { border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 8px 24px rgba(255,181,71,.18); }
+.ghost { border-radius: 10px; }
+.snd { border-radius: 10px; background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.08); }
+.board { right: 16px; top: 76px; width: 322px; border-radius: 16px; background: rgba(12,14,21,.72); backdrop-filter: blur(18px) saturate(140%); border: 1px solid rgba(255,255,255,.07); box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+.board .hd { padding: 14px 16px 10px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.row { padding: 8px 16px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.row:hover { background: rgba(255,255,255,.04); }
+.flap { border-radius: 7px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.07); }
+.tag { border-radius: 5px; }
+.tape { background: rgba(7,9,14,.85); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,.06); }
+.tape .lbl { background: linear-gradient(180deg, #ffc163, #f2a33a); }
+.drawer { background: rgba(14,16,24,.94); backdrop-filter: blur(18px); border-left: 1px solid rgba(255,255,255,.07); }
+.kv div, input.i, select.i, textarea.i, .mode { border-radius: 10px; }
+.list img, .list .ph { border-radius: 9px; }
+.toast { border-radius: 10px; }
+.plate { border-radius: 8px; background: rgba(10,12,18,.88); border: 1px solid rgba(255,181,71,.35); box-shadow: 0 8px 18px rgba(0,0,0,.45); }
+.ca { border-radius: 10px; } .ca b { border-radius: 7px; }
+.plate { overflow: hidden; } .plate .rk { border-radius: 0; }

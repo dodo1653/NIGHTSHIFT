@@ -4,9 +4,15 @@
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const Q = new URLSearchParams(location.search)
-const RELAY = Q.get('relay') || 'https://nightshift-relay.vetted-relay.workers.dev'
-const get = (p, q = '') => fetch(Q.get('relay') ? `${RELAY}/v1/${p}?${q}` : `/api/r?path=${p}&${q}`, { cache: 'no-store' }).then((r) => r.json())   // reads go through the edge cache
-const post = (p, b) => fetch(`${RELAY}/v1/${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json())
+// reads and most writes go through this site's proxy (/api/r); hiring goes to the relay itself, which limits hires per
+// connection and so needs the visitor's own address. ?relay=<url> talks to a relay directly (local testing).
+const RELAY = Q.get('relay')
+let relayBase = RELAY ? Promise.resolve(RELAY) : fetch('/api/r?path=where').then((r) => r.json()).then((j) => j.base).catch(() => '')
+const get = (p, q = '') => fetch(RELAY ? `${RELAY}/v1/${p}?${q}` : `/api/r?path=${p}&${q}`, { cache: 'no-store' }).then((r) => r.json())   // reads go through the edge cache
+const post = async (p, b) => {
+  const url = p === 'hire' ? `${await relayBase}/v1/hire` : RELAY ? `${RELAY}/v1/${p}` : `/api/r?path=${p}`
+  return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json())
+}
 const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? Math.floor(s) + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h' }
 const pct = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%'
 const solf = (v) => (Math.abs(v) >= 100 ? v.toFixed(0) : Math.abs(v) >= 1 ? v.toFixed(2) : v.toFixed(3))
@@ -37,16 +43,18 @@ const el = (tag, cls, style, parent = stage) => { const e = document.createEleme
 const zOf = (py) => 10 + Math.round(py / 5)
 
 // desks; the front seats go to the best ranks
+// name plates sit by the left end of each desk, low, so they never cover the monitor
+MAN.seats.forEach((s, i) => { const [sx, sy] = MAN.room.seats[i], [px, py] = floorPx(sx - 2.0, sy + 0.05); s.label = [px, py - 1.0 * ZPX] })
 const seatOrder = MAN.seats.map((s, i) => i).sort((a, b) => MAN.seats[b].origin[1] - MAN.seats[a].origin[1])
 const units = MAN.seats.map((s) => {
   const z = zOf(s.origin[1])
   const desk = el('img', 'layer', { left: SP.x + s.offset[0] + 'px', top: SP.y + s.offset[1] + 'px', width: SP.w + 'px', zIndex: z }); desk.src = 'assets/desk.png'
-  const scr = quad(shift(MAN.screen, s.offset), 320, 180, z + 1)
+  const scr = quad(shift(MAN.screen, s.offset), 980, 400, z + 1); scr.getContext('2d').setTransform(2, 0, 0, 2, 0, 0)   // drawn at 2x: 490 x 200 units
   const ag = el('div', 'agent', { left: SP.x + s.offset[0] + 'px', top: SP.y + s.offset[1] + 'px', width: SP.w + 'px', height: SP.h + 'px', zIndex: z + 2 })
   const plate = el('div', 'plate', { left: s.label[0] + 'px', top: s.label[1] - 14 + 'px', zIndex: 800 })
   return { s, scr, ag, plate, ctx: scr.getContext('2d'), agent: null, frame: Math.random() * SP.frames, react: null, reactUntil: 0 }
 })
-const sctx = quad(MAN.scope, 1600, 540, 5).getContext('2d')
+const sctx = quad(MAN.scope, 1600, 563, 5).getContext('2d')
 const kctx = quad(MAN.kiosk, 300, 180, 6).getContext('2d')
 const tctx = quad(MAN.ticker, 4000, 70, 5).getContext('2d')
 const cctx = quad(MAN.clock, 240, 240, 5).getContext('2d')
@@ -107,6 +115,7 @@ function pop(u, text, cls) { const p = el('div', 'pop ' + cls, { left: u.s.label
 function paintFloor() {
   $('liveDot').className = 'led' + (floor.live ? '' : ' off'); $('liveTxt').textContent = floor.live ? 'live on pump.fun' : 'reconnecting'
   $('watched').textContent = (floor.watched || 0).toLocaleString()
+  $('iWatched').textContent = (floor.watched || 0).toLocaleString(); $('iAgents').textContent = (floor.agents || []).length || '–'
   const agents = floor.agents
   seatOrder.forEach((seat, k) => {
     const u = units[seat], a = agents[k] || null
@@ -159,41 +168,110 @@ function paintFloor() {
 
 // ---------------------------------------------------------------- every frame
 const mcf = (mc) => { const v = sol ? mc * sol : mc; return (sol ? '$' : '') + (v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'K' : v.toFixed(0)) + (sol ? '' : ' SOL') }
-function drawScreen(u, t) {
-  const c = u.ctx, a = u.agent, W = 320, H = 180
-  c.fillStyle = '#060a08'; c.fillRect(0, 0, W, H)
-  c.strokeStyle = 'rgba(111,227,155,.07)'; c.lineWidth = 1; for (let y = 30; y < H; y += 30) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke() }
-  if (!a) { c.fillStyle = 'rgba(255,181,71,.6)'; c.font = '800 30px "Big Shoulders Display"'; c.fillText('FREE DESK', 18, 100); return }
-  c.font = '600 24px "IBM Plex Mono"'; c.fillStyle = a.pct >= 0 ? '#6fe39b' : '#ff7a6b'; c.fillText(pct(a.pct), 16, 36)
-  c.font = '500 15px "IBM Plex Mono"'; c.fillStyle = 'rgba(230,225,215,.65)'; c.fillText(`${a.open} open  ${a.wins}W ${a.losses}L`, 16, 60)
-  if (a.last) { c.font = '800 24px "Big Shoulders Display"'; c.fillStyle = a.last.k === 'buy' ? '#ffb547' : '#e8e2d6'; c.fillText(`${a.last.k === 'buy' ? 'BUY' : 'SELL'} $${String(a.last.s).slice(0, 10).toUpperCase()}`, 16, 96) }
-  const bars = (a.hist || []).slice(-14)
-  bars.forEach((v, i) => { const h = Math.min(56, Math.abs(v) * 0.6 + 4); c.fillStyle = v >= 0 ? '#6fe39b' : '#ff7a6b'; c.fillRect(16 + i * 21, v >= 0 ? 164 - h : 164, 14, h) })
-  if (!bars.length) { c.strokeStyle = '#6fe39b'; c.lineWidth = 3; c.beginPath(); for (let x = 0; x <= 288; x += 8) c.lineTo(16 + x, 142 + Math.sin((x + t / 18) / 22) * 9); c.stroke() }
-  c.fillStyle = `rgba(255,255,255,${0.02 + 0.015 * Math.sin(t / 90 + u.s.origin[0])})`; c.fillRect(0, 0, W, H)
+// coin pictures for the screens: loaded once, drawn when ready
+const imgs = new Map()
+function pic(url) {
+  if (!url) return null
+  let e = imgs.get(url); if (e) return e.ok ? e.im : null
+  const im = new Image(); e = { im, ok: false }; imgs.set(url, e); im.onload = () => (e.ok = true); im.src = url
+  if (imgs.size > 400) imgs.delete(imgs.keys().next().value)
+  return null
 }
+const UI = { bg: '#101116', card: '#181a21', line: '#262933', ink: '#f2f3f5', dim: '#8b8f9a', up: '#4ade80', dn: '#f87171', amber: '#ffb547' }
+function rr(c, x, y, w, h, r) { c.beginPath(); c.roundRect(x, y, w, h, r) }
+function coinTile(c, x, y, s, f) {
+  const im = pic(f.img)
+  c.save(); rr(c, x, y, s, s, s * 0.22); c.clip()
+  if (im) c.drawImage(im, x, y, s, s)
+  else { const g = c.createLinearGradient(x, y, x + s, y + s); g.addColorStop(0, '#2a3a2f'); g.addColorStop(1, '#16201a'); c.fillStyle = g; c.fillRect(x, y, s, s); c.fillStyle = UI.up; c.font = `800 ${s * 0.42}px "IBM Plex Sans"`; c.textAlign = 'center'; c.fillText(String(f.sym || '?').slice(0, 2).toUpperCase(), x + s / 2, y + s * 0.64); c.textAlign = 'left' }
+  c.restore()
+}
+// a monitor: a pump.fun-style trading screen for the coin the agent holds right now
+function drawScreen(u, t) {
+  const c = u.ctx, a = u.agent, W = 490, H = 200
+  c.fillStyle = UI.bg; c.fillRect(0, 0, W, H)
+  if (!a) {
+    c.fillStyle = 'rgba(255,181,71,.85)'; c.font = '800 44px "Big Shoulders Display"'; c.fillText('FREE DESK', 24, 92)
+    c.fillStyle = UI.dim; c.font = '500 20px "IBM Plex Sans"'; c.fillText('hire an agent to trade from here', 26, 128)
+    c.fillStyle = 'rgba(255,181,71,.18)'; rr(c, 24, 148, 150, 30, 8); c.fill(); c.fillStyle = UI.amber; c.font = '700 17px "IBM Plex Sans"'; c.fillText('Hire · free', 48, 169); return
+  }
+  // top bar: the agent and its shift return
+  c.fillStyle = '#0b0c10'; c.fillRect(0, 0, W, 30)
+  c.save(); c.translate(16, 15); c.rotate(-0.6); rr(c, -9, -4, 18, 8, 4); c.fillStyle = UI.up; c.fill(); c.fillStyle = '#f4f1ea'; c.fillRect(0, -4, 9, 8); c.restore()
+  c.font = '700 15px "IBM Plex Sans"'; c.fillStyle = UI.ink; const nm = a.name.toUpperCase(); c.fillText(nm, 32, 20)
+  const nw = c.measureText(nm).width
+  c.font = '500 13px "IBM Plex Sans"'; c.fillStyle = UI.dim; c.fillText(a.modeLabel, 32 + nw + 10, 20)
+  c.textAlign = 'right'; c.font = '700 16px "IBM Plex Mono"'; c.fillStyle = a.pct >= 0 ? UI.up : UI.dn; c.fillText(pct(a.pct), W - 12, 21); c.textAlign = 'left'
+  const f = a.focus
+  if (!f) {
+    // nothing open: the agent watches new launches
+    c.fillStyle = UI.dim; c.font = '600 14px "IBM Plex Sans"'; c.fillText('SCANNING NEW LAUNCHES', 16, 54)
+    const k0 = (u.s.origin[0] | 0) % 5
+    ;(board?.coins || []).slice(k0, k0 + 3).forEach((x, i) => {
+      const y = 66 + i * 44; c.fillStyle = UI.card; rr(c, 12, y, W - 24, 38, 8); c.fill()
+      coinTile(c, 18, y + 4, 30, { img: x.img, sym: x.symbol })
+      c.fillStyle = UI.ink; c.font = '700 16px "IBM Plex Sans"'; c.fillText('$' + String(x.symbol).slice(0, 10).toUpperCase(), 58, y + 18)
+      c.fillStyle = UI.dim; c.font = '500 12px "IBM Plex Sans"'; c.fillText(String(x.name).slice(0, 22), 58, y + 33)
+      c.textAlign = 'right'; c.fillStyle = UI.up; c.font = '600 14px "IBM Plex Mono"'; c.fillText(mcf(x.mc), W - 24, y + 24); c.textAlign = 'left'
+    })
+    return
+  }
+  // the coin: picture, ticker, market cap, bonding curve
+  coinTile(c, 12, 40, 48, f)
+  c.fillStyle = UI.ink; c.font = '800 21px "IBM Plex Sans"'; c.fillText('$' + String(f.sym).slice(0, 10).toUpperCase(), 70, 60)
+  c.fillStyle = UI.dim; c.font = '500 12px "IBM Plex Sans"'; c.fillText(String(f.name).slice(0, 20), 70, 78)
+  c.fillStyle = UI.up; c.font = '700 15px "IBM Plex Mono"'; c.fillText('MC ' + mcf(f.mc), 70, 98)
+  c.fillStyle = UI.line; rr(c, 12, 106, 176, 7, 4); c.fill(); c.fillStyle = UI.up; rr(c, 12, 106, Math.max(7, 176 * f.prog / 100), 7, 4); c.fill()
+  c.fillStyle = UI.dim; c.font = '500 11px "IBM Plex Sans"'; c.fillText(`bonding curve ${f.prog}% · ${f.buyers} buyers`, 12, 128)
+  // position
+  c.fillStyle = UI.card; rr(c, 12, 138, 176, 52, 8); c.fill()
+  c.fillStyle = UI.dim; c.font = '600 11px "IBM Plex Sans"'; c.fillText('POSITION', 22, 155)
+  c.fillStyle = f.pct >= 0 ? UI.up : UI.dn; c.font = '800 22px "IBM Plex Mono"'; c.fillText(pct(f.pct), 22, 180)
+  c.fillStyle = UI.dim; c.font = '500 12px "IBM Plex Mono"'; c.textAlign = 'right'; c.fillText(solf(f.cost) + ' SOL', 180, 180); c.textAlign = 'left'
+  // the chart: candles from the coin's recent trades, the agent's entry dashed
+  const X0 = 200, Y0 = 40, CW = W - X0 - 12, CH = H - Y0 - 12
+  c.fillStyle = UI.card; rr(c, X0, Y0, CW, CH, 8); c.fill()
+  const sp = f.spark || [], K = 4, cs = []
+  for (let i = 0; i < sp.length; i += K) { const g = sp.slice(Math.max(0, i - 1), i + K); if (g.length) cs.push([g[0], Math.max(...g), Math.min(...g), g[g.length - 1]]) }
+  if (cs.length) {
+    let hi = Math.max(f.entry, ...cs.map((k) => k[1])), lo = Math.min(f.entry, ...cs.map((k) => k[2])); if (hi === lo) { hi *= 1.01; lo *= 0.99 }
+    const py = (v) => Y0 + 10 + (CH - 20) * (1 - (v - lo) / (hi - lo)), bw = Math.min(16, (CW - 20) / cs.length)
+    c.strokeStyle = 'rgba(255,255,255,.05)'; c.lineWidth = 1; for (let g = 1; g < 4; g++) { c.beginPath(); c.moveTo(X0 + 6, Y0 + CH * g / 4); c.lineTo(X0 + CW - 6, Y0 + CH * g / 4); c.stroke() }
+    cs.forEach(([o, h, l, cl], i) => {
+      const x = X0 + 10 + i * bw + bw / 2, up = cl >= o; c.strokeStyle = c.fillStyle = up ? UI.up : UI.dn
+      c.beginPath(); c.moveTo(x, py(h)); c.lineTo(x, py(l)); c.lineWidth = 1.5; c.stroke()
+      const y1 = py(Math.max(o, cl)), y2 = py(Math.min(o, cl)); c.fillRect(x - bw * 0.32, y1, bw * 0.64, Math.max(2, y2 - y1))
+    })
+    c.setLineDash([5, 4]); c.strokeStyle = UI.amber; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X0 + 6, py(f.entry)); c.lineTo(X0 + CW - 6, py(f.entry)); c.stroke(); c.setLineDash([])
+    c.fillStyle = UI.amber; c.font = '700 11px "IBM Plex Mono"'; c.fillText('ENTRY', X0 + CW - 50, py(f.entry) - 5)
+  } else { c.fillStyle = UI.dim; c.font = '500 13px "IBM Plex Sans"'; c.fillText('waiting for trades…', X0 + 14, Y0 + CH / 2) }
+  c.fillStyle = `rgba(255,255,255,${0.015 + 0.01 * Math.sin(t / 90 + u.s.origin[0])})`; c.fillRect(0, 0, W, H)
+}
+// the LED wall: pump.fun's newest launches as cards, copies flagged
 function drawScope(t) {
-  const c = sctx, W = 1600, H = 540
-  c.fillStyle = '#050a07'; c.fillRect(0, 0, W, H)
-  c.fillStyle = '#ffb547'; c.font = '800 44px "Big Shoulders Display"'; c.fillText('THE SCOPE', 30, 56)
-  c.font = '500 20px "IBM Plex Mono"'; c.fillStyle = 'rgba(220,215,200,.6)'; c.fillText('every pump.fun launch, live. copies flagged.', 250, 52)
-  c.font = '600 24px "IBM Plex Mono"'; c.fillStyle = '#6fe39b'; c.textAlign = 'right'; c.fillText((floor?.watched || 0) + ' watched', W - 30, 54); c.textAlign = 'left'
-  ;(board?.coins || []).slice(0, 16).forEach((x, i) => {
-    const col = i % 2, row = Math.floor(i / 2), X = 30 + col * 785, Y = 106 + row * 52
-    c.fillStyle = row % 2 ? 'rgba(255,255,255,.025)' : 'rgba(0,0,0,0)'; c.fillRect(X - 10, Y - 34, 770, 48)
-    c.font = '800 30px "Big Shoulders Display"'; c.fillStyle = x.copyOf ? '#ff7a6b' : '#f3eee4'; c.fillText('$' + String(x.symbol).slice(0, 10).toUpperCase(), X, Y)
-    c.font = '500 19px "IBM Plex Mono"'; c.fillStyle = 'rgba(210,205,190,.6)'; c.fillText(String(x.name).slice(0, 16), X + 210, Y)
-    c.font = '600 22px "IBM Plex Mono"'; c.fillStyle = '#6fe39b'; c.fillText(mcf(x.mc), X + 440, Y)
-    c.fillStyle = 'rgba(210,205,190,.5)'; c.fillText(ago(x.at), X + 572, Y)
-    if (x.copyOf) { c.fillStyle = '#ff7a6b'; c.fillRect(X + 650, Y - 24, 100, 32); c.fillStyle = '#250805'; c.font = '800 22px "Big Shoulders Display"'; c.fillText('COPY', X + 672, Y) }
-    else if (x.grade) { c.fillStyle = 'AB'.includes(x.grade) ? '#6fe39b' : x.grade === 'C' ? '#f4d35e' : '#f59e57'; c.fillRect(X + 650, Y - 24, 36, 32); c.fillStyle = '#111'; c.font = '800 22px "Big Shoulders Display"'; c.fillText(x.grade, X + 661, Y) }
+  const c = sctx, W = 1600, H = 563
+  c.fillStyle = '#07080b'; c.fillRect(0, 0, W, H)
+  c.fillStyle = UI.ink; c.font = '800 40px "Big Shoulders Display"'; c.fillText('THE SCOPE', 32, 54)
+  c.fillStyle = UI.dim; c.font = '500 19px "IBM Plex Sans"'; c.fillText('every pump.fun launch, live · copies flagged', 220, 50)
+  c.textAlign = 'right'; c.fillStyle = UI.up; c.font = '600 22px "IBM Plex Mono"'; c.fillText((floor?.watched || 0).toLocaleString() + ' watched', W - 32, 52); c.textAlign = 'left'
+  ;(board?.coins || []).slice(0, 12).forEach((x, i) => {
+    const col = i % 4, row = Math.floor(i / 4), cw = 376, ch = 146, X = 24 + col * (cw + 12), Y = 80 + row * (ch + 12)
+    c.fillStyle = UI.card; rr(c, X, Y, cw, ch, 14); c.fill()
+    if (x.copyOf) { c.strokeStyle = UI.dn; c.lineWidth = 3; rr(c, X, Y, cw, ch, 14); c.stroke() }
+    coinTile(c, X + 14, Y + 14, 92, { img: x.img, sym: x.symbol })
+    c.fillStyle = x.copyOf ? UI.dn : UI.ink; c.font = '800 28px "IBM Plex Sans"'; c.fillText('$' + String(x.symbol).slice(0, 9).toUpperCase(), X + 120, Y + 44)
+    c.fillStyle = UI.dim; c.font = '500 17px "IBM Plex Sans"'; c.fillText(String(x.name).slice(0, 18), X + 120, Y + 68)
+    c.fillStyle = UI.up; c.font = '700 21px "IBM Plex Mono"'; c.fillText('MC ' + mcf(x.mc), X + 120, Y + 98)
+    c.fillStyle = UI.dim; c.font = '500 16px "IBM Plex Mono"'; c.textAlign = 'right'; c.fillText(ago(x.at), X + cw - 14, Y + 98); c.textAlign = 'left'
+    c.fillStyle = UI.line; rr(c, X + 120, Y + 114, cw - 134, 9, 5); c.fill(); c.fillStyle = UI.up; rr(c, X + 120, Y + 114, Math.max(9, (cw - 134) * (x.prog || 0) / 100), 9, 5); c.fill()
+    if (x.copyOf) { c.fillStyle = UI.dn; rr(c, X + cw - 86, Y + 18, 72, 28, 7); c.fill(); c.fillStyle = '#2a0707'; c.font = '800 19px "Big Shoulders Display"'; c.fillText('COPY', X + cw - 72, Y + 39) }
+    else if (x.grade) { c.fillStyle = 'AB'.includes(x.grade) ? UI.up : x.grade === 'C' ? '#f4d35e' : '#f59e57'; rr(c, X + cw - 44, Y + 18, 30, 28, 7); c.fill(); c.fillStyle = '#111'; c.font = '800 20px "Big Shoulders Display"'; c.fillText(x.grade, X + cw - 35, Y + 39) }
   })
   if (banner && performance.now() < banner.until) {
     c.globalAlpha = Math.min(1, (banner.until - performance.now()) / 600)
-    c.fillStyle = 'rgba(5,10,7,.94)'; c.fillRect(0, 170, W, 200); c.fillStyle = banner.color; c.fillRect(0, 170, W, 6); c.fillRect(0, 364, W, 6)
-    c.font = '800 96px "Big Shoulders Display"'; c.textAlign = 'center'; c.fillText(banner.text, W / 2, 304); c.textAlign = 'left'; c.globalAlpha = 1
+    c.fillStyle = 'rgba(7,8,11,.94)'; c.fillRect(0, 180, W, 200); c.fillStyle = banner.color; c.fillRect(0, 180, W, 6); c.fillRect(0, 374, W, 6)
+    c.font = '800 96px "Big Shoulders Display"'; c.textAlign = 'center'; c.fillText(banner.text, W / 2, 314); c.textAlign = 'left'; c.globalAlpha = 1
   }
-  c.fillStyle = 'rgba(255,255,255,.02)'; c.fillRect(0, (t / 8) % H, W, 3)
 }
 function drawKiosk(t) {
   const c = kctx; c.fillStyle = '#050a07'; c.fillRect(0, 0, 300, 180)
@@ -246,7 +324,7 @@ function frame(t) {
 requestAnimationFrame(frame)
 pullFloor(); setInterval(pullFloor, 3000)
 pullBoard(); setInterval(pullBoard, 5000)
-setInterval(() => { if (!floor) return; const left = Math.max(0, floor.season.end - Date.now()); $('shift').textContent = `${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}` }, 500)
+setInterval(() => { if (!floor) return; const left = Math.max(0, floor.season.end - Date.now()); $('shift').textContent = $('iShift').textContent = `${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}` }, 500)
 
 // ---------------------------------------------------------------- drawers
 function open(id) { document.querySelectorAll('.drawer').forEach((d) => d.classList.toggle('on', d.id === id)) }
@@ -362,4 +440,27 @@ $('fGo').onclick = async () => {
     toast('launched. it is on the Scope now'); window.open('https://pump.fun/coin/' + mint.publicKey.toBase58(), '_blank')
   } catch (e) { toast(String(e.message || e).slice(0, 220), true) }
   $('fNote').textContent = NOTE; b.disabled = false
+}
+
+// ---------------------------------------------------------------- the opening
+const CA = ''   // $SHIFT's contract address, once it exists
+{
+  const intro = $('intro'), lift = () => { intro.classList.add('off'); try { sessionStorage.setItem('ns.in', '1') } catch {} }
+  try { if (sessionStorage.getItem('ns.in') || location.hash) intro.classList.add('off') } catch {}
+  $('iEnter').onclick = lift
+  $('iHire').onclick = () => { lift(); open('dHire') }
+  if (CA) { const b = $('iCa'); b.style.display = 'flex'; b.querySelector('code').textContent = CA; b.onclick = () => navigator.clipboard?.writeText(CA).then(() => toast('$SHIFT contract address copied')) }
+}
+
+// ?solo=1 shows one live monitor full size (used to film the screens)
+if (Q.get('solo')) {
+  document.body.style.background = '#05060a'; [...document.body.children].forEach((e) => { if (e.id !== 'view') e.style.display = 'none' })
+  setInterval(() => {
+    const u = units.find((x) => x.agent?.focus && (x.agent.focus.spark || []).length > 20) || units.find((x) => x.agent?.focus) || units.find((x) => x.agent)
+    if (!u) return
+    units.forEach((x) => (x.scr.style.visibility = x === u ? 'visible' : 'hidden'))
+    if (u.scr.parentNode !== document.body) document.body.appendChild(u.scr)
+    Object.assign(u.scr.style, { position: 'fixed', left: '0px', top: '0px', width: '1960px', height: '800px', transform: 'none', zIndex: 9999 })
+    document.querySelectorAll('#stage > *:not(.quad)').forEach((e) => (e.style.visibility = 'hidden'))
+  }, 500)
 }

@@ -65,6 +65,14 @@ export function createFloor({ feed, store, gradeOf, tierOf }) {
       modeLabel: MODES[a.strat.mode].label, mult: a.mult, equity: +eq.toFixed(4), pnl: +pnl.toFixed(4), pct: +((pnl / a.start) * 100).toFixed(2),
       open: Object.keys(a.pos).length, wins: a.wins, losses: a.losses, total: +a.total.toFixed(3), seasons: a.seasons,
       last: a.trades[0] || null, hist: a.trades.filter((t) => t.k === "sell").slice(0, 14).map((t) => t.pct).reverse() }
+    // the coin on the agent's monitor: its newest open position, with the coin's recent prices for a chart
+    const fm = Object.entries(a.pos).sort((x, y) => y[1].at - x[1].at)[0]
+    if (fm) {
+      const [m, p] = fm, c = feed.coins.get(m), now = c ? priceOf(c) : p.entry, v = c ? sellSol(c, p.tok) : 0
+      o.focus = { mint: m, sym: p.sym, name: c?.name || p.sym, img: c?.meta?.image || null, mc: +(now * 1e9).toFixed(2), prog: c ? (c.done ? 100 : +Math.max(0, Math.min(100, (1 - c.rTok / c.rTok0) * 100)).toFixed(1)) : 0,
+        entry: p.entry, now, pct: p.cost ? +(((v - p.cost) / p.cost) * 100).toFixed(1) : 0, cost: +p.cost.toFixed(3), at: p.at, buyers: c ? c.buyers.size : 0,
+        spark: c ? c.ticks.slice(-60).map((t) => +t[1].toPrecision(5)) : [] }
+    }
     if (full) {
       o.strategy = a.strat
       o.positions = Object.entries(a.pos).map(([m, p]) => { const c = feed.coins.get(m); const v = c ? sellSol(c, p.tok) : 0

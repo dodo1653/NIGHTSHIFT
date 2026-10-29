@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/m/:id.json", "destination": "/api/m?k=m&id=:id" },
+    { "source": "/i/:id", "destination": "/api/m?k=i&id=:id" }
+  ]
+}

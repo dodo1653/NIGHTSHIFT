@@ -3,3 +3,10 @@ relay/node_modules/
 relay/.wrangler/
 node_modules/
 .dev.vars
+relay/.data/
+relay/node_modules/
+relay/.wrangler/
+promo/frames120/
+promo/frames120.log
+promo/out/
+art/test2/

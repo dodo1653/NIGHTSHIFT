@@ -48,38 +48,116 @@ def srgb(h):
     h = h.lstrip("#"); c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
     return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
 
+# ---------------------------------------------------------------- v2: a real trading office at night
+# (spliced into floor_scene.py in place of the v1 materials and pieces; same camera, seats and anchors)
+def shader(name, base, rough=0.5, metal=0.0, emit=None, strength=0.0, alpha=1.0, coat=0.0, sss=0.0, noise=0.0, nscale=60.0, bump=0.0, transmission=0.0):
+    m = bpy.data.materials.get(name)
+    if m: return m
+    m = bpy.data.materials.new(name); m.use_nodes = True; nt = m.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    b.inputs["Base Color"].default_value = (*base, 1); b.inputs["Roughness"].default_value = rough; b.inputs["Metallic"].default_value = metal
+    if emit:
+        k = "Emission Color" if "Emission Color" in b.inputs else "Emission"
+        b.inputs[k].default_value = (*emit, 1); b.inputs["Emission Strength"].default_value = strength
+    if alpha < 1: b.inputs["Alpha"].default_value = alpha
+    c = b.inputs.get("Coat Weight") or b.inputs.get("Clearcoat")
+    if c and coat: c.default_value = coat
+    if sss:
+        w = b.inputs.get("Subsurface Weight") or b.inputs.get("Subsurface")
+        if w: w.default_value = sss
+    if transmission:
+        t = b.inputs.get("Transmission Weight") or b.inputs.get("Transmission")
+        if t: t.default_value = transmission
+    if noise or bump:
+        tc = nt.nodes.new("ShaderNodeTexCoord"); nz = nt.nodes.new("ShaderNodeTexNoise")
+        nz.inputs["Scale"].default_value = nscale; nz.inputs["Detail"].default_value = 8
+        nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+        if noise:
+            mx = nt.nodes.new("ShaderNodeMixRGB"); mx.blend_type = "MULTIPLY"; mx.inputs["Fac"].default_value = noise
+            mx.inputs["Color1"].default_value = (*base, 1); nt.links.new(nz.outputs["Color"], mx.inputs["Color2"]); nt.links.new(mx.outputs["Color"], b.inputs["Base Color"])
+        if bump:
+            bp = nt.nodes.new("ShaderNodeBump"); bp.inputs["Strength"].default_value = bump; bp.inputs["Distance"].default_value = 0.01
+            nt.links.new(nz.outputs["Fac"], bp.inputs["Height"]); nt.links.new(bp.outputs["Normal"], b.inputs["Normal"])
+    return m
+
+def wood_mat(name, light, dark, rough=0.38):
+    m = bpy.data.materials.get(name)
+    if m: return m
+    m = bpy.data.materials.new(name); m.use_nodes = True; nt = m.node_tree; b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    tc = nt.nodes.new("ShaderNodeTexCoord"); wv = nt.nodes.new("ShaderNodeTexWave"); wv.inputs["Scale"].default_value = 7.0
+    wv.inputs["Distortion"].default_value = 6; wv.inputs["Detail"].default_value = 4; wv.bands_direction = "X"
+    rp = nt.nodes.new("ShaderNodeValToRGB"); rp.color_ramp.elements[0].color = (*dark, 1); rp.color_ramp.elements[1].color = (*light, 1)
+    nt.links.new(tc.outputs["Object"], wv.inputs["Vector"]); nt.links.new(wv.outputs["Fac"], rp.inputs["Fac"]); nt.links.new(rp.outputs["Color"], b.inputs["Base Color"])
+    b.inputs["Roughness"].default_value = rough
+    c = b.inputs.get("Coat Weight") or b.inputs.get("Clearcoat")
+    if c: c.default_value = 0.25
+    return m
+
+def city_mat(name, seed, warm=True):
+    # a tower face: a grid of windows, a random share lit (brick texture, its own random bias per brick)
+    m = bpy.data.materials.get(name)
+    if m: return m
+    m = bpy.data.materials.new(name); m.use_nodes = True; nt = m.node_tree; b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    tc = nt.nodes.new("ShaderNodeTexCoord"); mp = nt.nodes.new("ShaderNodeMapping"); mp.inputs["Rotation"].default_value = (0, math.radians(90), 0)
+    mp.inputs["Location"].default_value = (seed * 3.1, seed * 1.7, 0)
+    br = nt.nodes.new("ShaderNodeTexBrick"); br.inputs["Scale"].default_value = 3.2; br.inputs["Mortar Size"].default_value = 0.06; br.inputs["Bias"].default_value = 0.72
+    br.inputs["Brick Width"].default_value = 0.5; br.inputs["Row Height"].default_value = 0.5; br.offset = 0
+    br.inputs["Color1"].default_value = (*(srgb("#ffcf8a") if warm else srgb("#bfe3ff")), 1); br.inputs["Color2"].default_value = (0.0, 0.0, 0.0, 1); br.inputs["Mortar"].default_value = (0, 0, 0, 1)
+    nt.links.new(tc.outputs["Object"], mp.inputs["Vector"]); nt.links.new(mp.outputs["Vector"], br.inputs["Vector"])
+    b.inputs["Base Color"].default_value = (*srgb("#0b1020"), 1); b.inputs["Roughness"].default_value = 0.6
+    k = "Emission Color" if "Emission Color" in b.inputs else "Emission"
+    nt.links.new(br.outputs["Color"], b.inputs[k]); b.inputs["Emission Strength"].default_value = 1.1
+    return m
+
 M = {
-    "floor": mat("floor", srgb("#3a3f4b"), 0.32),
-    "floorline": mat("floorline", srgb("#454b58"), 0.4),
-    "wall": mat("wall", srgb("#d9d2c5"), 0.8),
-    "wallDark": mat("wallDark", srgb("#3a3f4a"), 0.7),
-    "trim": mat("trim", srgb("#1d2027"), 0.4),
-    "wood": mat("wood", srgb("#b07a4f"), 0.45),
-    "woodDark": mat("woodDark", srgb("#6e4a30"), 0.5),
-    "steel": mat("steel", srgb("#b9bec8"), 0.3, 0.9),
-    "black": mat("black", srgb("#121318"), 0.35),
-    "screen": mat("screen", srgb("#05070a"), 0.2, emit=srgb("#0b1a14"), strength=0.6),
-    "green": mat("green", srgb("#4ade80"), 0.4, emit=srgb("#4ade80"), strength=3.0),
-    "glass": mat("glass", srgb("#88aacc"), 0.05, alpha=0.25),
-    "plant": mat("plant", srgb("#3f7a3a"), 0.6),
-    "pot": mat("pot", srgb("#e8e2d6"), 0.5),
-    "chair": mat("chair", srgb("#24262d"), 0.55),
-    "fabric": mat("fabric", srgb("#3b4252"), 0.9),
-    "warm": mat("warm", srgb("#ffd9a0"), 0.5, emit=srgb("#ffcf8a"), strength=8.0),
-    "city": mat("city", srgb("#0d1424"), 0.9),
-    "tower": mat("tower", srgb("#1b2540"), 0.9),
-    "rug": mat("rug", srgb("#6b3b2e"), 0.95),
-    "neon": mat("neon", srgb("#ffb547"), 0.4, emit=srgb("#ffb547"), strength=14.0),
+    "floor": shader("floor", srgb("#2b2f36"), 0.24, noise=0.35, nscale=6, bump=0.05),           # polished concrete
+    "floorline": shader("floorline", srgb("#22262c"), 0.4),
+    "carpet": shader("carpet", srgb("#121519"), 0.95, noise=0.35, nscale=220, bump=0.2),
+    "brass": shader("brass", srgb("#c9a15a"), 0.28, 1.0),
+    "wall": shader("wall", srgb("#1a1f28"), 0.85, noise=0.15, nscale=12),
+    "wallDark": shader("wallDark", srgb("#14181f"), 0.8),
+    "slat": wood_mat("slat", srgb("#6b4529"), srgb("#3d2615"), 0.55),
+    "trim": shader("trim", srgb("#0d0f13"), 0.35),
+    "wood": wood_mat("wood", srgb("#d2b48e"), srgb("#bf9d74")),                                  # white oak desk tops
+    "woodDark": wood_mat("woodDark", srgb("#4a3020"), srgb("#2e1d13"), 0.45),
+    "steel": shader("steel", srgb("#c3c7cf"), 0.25, 1.0),
+    "black": shader("black", srgb("#0e0f12"), 0.32, coat=0.3),
+    "frame": shader("frame", srgb("#17191e"), 0.45, 0.6),
+    "screen": shader("screen", srgb("#05070a"), 0.15, emit=srgb("#0d1a24"), strength=1.2),
+    "green": shader("green", srgb("#4ade80"), 0.4, emit=srgb("#4ade80"), strength=4.0),
+    "glass": shader("glass", srgb("#a8c4e0"), 0.03, transmission=1.0, alpha=0.18),
+    "plant": shader("plant", srgb("#2f6b35"), 0.5, sss=0.25, noise=0.3, nscale=30),
+    "plant2": shader("plant2", srgb("#3f8a3f"), 0.5, sss=0.25, noise=0.3, nscale=30),
+    "pot": shader("pot", srgb("#2a2c30"), 0.6, noise=0.2, nscale=40, bump=0.1),
+    "chair": shader("chair", srgb("#1b1d22"), 0.6, noise=0.2, nscale=300, bump=0.2),
+    "mesh": shader("mesh", srgb("#24272e"), 0.8, noise=0.4, nscale=500, bump=0.3),
+    "fabric": shader("fabric", srgb("#3b4252"), 0.9),
+    "warm": shader("warm", srgb("#ffd9a0"), 0.5, emit=srgb("#ffcf8a"), strength=8.0),
+    "city": shader("city", srgb("#070b16"), 0.9),
+    "tower": shader("tower", srgb("#0d1426"), 0.9),
+    "neon": shader("neon", srgb("#ff8a1f"), 0.3, emit=srgb("#ff8a1f"), strength=9.0),
+    "led": shader("led", srgb("#9ad8ff"), 0.3, emit=srgb("#9ad8ff"), strength=6.0),
+    "rubber": shader("rubber", srgb("#121316"), 0.85),
+    "ceramic": shader("ceramic", srgb("#efeae2"), 0.25, coat=0.4),
+    "white": shader("white", srgb("#e9e6df"), 0.4),
 }
 
-def box(name, size, loc, m, bevel=0.03, rot=(0, 0, 0)):
+def box(name, size, loc, m, bevel=0.03, rot=(0, 0, 0), seg=4):
     bpy.ops.mesh.primitive_cube_add(size=1, location=loc, rotation=rot)
     o = bpy.context.active_object; o.name = name; o.scale = size
     bpy.ops.object.transform_apply(scale=True)
     if bevel:
-        b = o.modifiers.new("bev", "BEVEL"); b.width = bevel; b.segments = 3; b.limit_method = "ANGLE"
+        b = o.modifiers.new("bev", "BEVEL"); b.width = bevel; b.segments = seg; b.limit_method = "ANGLE"
+        try: b.harden_normals = True
+        except Exception: pass
     o.data.materials.append(m)
     for p in o.data.polygons: p.use_smooth = True
+    return o
+
+def soft(name, size, loc, m, rot=(0, 0, 0), level=2, bevel=0.35):
+    # a soft, rounded block (bevelled cube + subdivision): cushions, torsos, sneakers
+    o = box(name, size, loc, m, min(size) * bevel, rot, 3)
+    s = o.modifiers.new("sub", "SUBSURF"); s.levels = level; s.render_levels = level
     return o
 
 def cyl(name, r, d, loc, m, rot=(0, 0, 0), verts=32):
@@ -89,81 +167,138 @@ def cyl(name, r, d, loc, m, rot=(0, 0, 0), verts=32):
     return o
 
 def sphere(name, r, loc, m, scale=(1, 1, 1)):
-    bpy.ops.mesh.primitive_uv_sphere_add(radius=r, location=loc, segments=32, ring_count=16)
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=r, location=loc, segments=40, ring_count=20)
     o = bpy.context.active_object; o.name = name; o.scale = scale; o.data.materials.append(m)
     bpy.ops.object.shade_smooth()
     return o
 
+def seat_light(x, y):
+    # a warm pendant over each desk (the fixture is above the frame), plus the screen's cool spill on the agent
+    l = bpy.data.lights.new("pend", "AREA"); l.shape = "RECTANGLE"; l.size = 2.4; l.size_y = 0.4; l.energy = 300; l.color = (1.0, 0.86, 0.68)
+    o = bpy.data.objects.new("pend", l); sc.collection.objects.link(o); o.location = (x, y + 0.2, 4.6)
+    s = bpy.data.lights.new("spill", "AREA"); s.size = 1.6; s.size_y = 0.7; s.shape = "RECTANGLE"; s.energy = 45; s.color = (0.55, 0.75, 1.0)
+    so = bpy.data.objects.new("spill", s); sc.collection.objects.link(so); so.location = (x, y + 0.74, 1.6)
+    so.rotation_euler = (math.radians(90), 0, 0)   # facing -y, toward the seat
+    r = bpy.data.lights.new("rim", "AREA"); r.size = 1.2; r.energy = 90; r.color = (0.8, 0.88, 1.0)     # a soft light from behind the chair
+    try: r.use_shadow = False
+    except Exception: pass
+    try: r.cycles.cast_shadow = False
+    except Exception: pass
+    ro = bpy.data.objects.new("rim", r); sc.collection.objects.link(ro); ro.location = (x + 0.8, y - 2.6, 3.0)
+    ro.rotation_euler = (Vector((x, y - 0.6, 1.1)) - ro.location).to_track_quat("-Z", "Y").to_euler()
+
 # ---------------------------------------------------------------- pieces
 def desk(x, y, tag=""):
     parts = []
-    parts.append(box("top" + tag, (2.6, 1.25, 0.08), (x, y + 0.35, 0.78), M["wood"], 0.02))
-    for dx in (-1.2, 1.2):
-        parts.append(box("leg" + tag, (0.08, 1.1, 0.74), (x + dx, y + 0.35, 0.37), M["black"], 0.01))
-    parts.append(box("modesty" + tag, (2.3, 0.04, 0.45), (x, y + 0.93, 0.5), M["woodDark"], 0.01))
-    # monitor facing the seat (−y), raised so it shows over the agent's shoulder
-    parts.append(box("stand" + tag, (0.08, 0.08, 0.42), (x, y + 0.8, 1.02), M["steel"], 0.01))
-    parts.append(box("foot" + tag, (0.4, 0.25, 0.03), (x, y + 0.8, 0.83), M["steel"], 0.01))
-    mon = box("monitor" + tag, (1.5, 0.07, 0.9), (x, y + 0.82, 1.62), M["black"], 0.03)
+    parts.append(box("top" + tag, (2.7, 1.3, 0.05), (x, y + 0.35, 0.765), M["wood"], 0.012))
+    for dx in (-1.22, 1.22):   # black steel sled legs
+        parts.append(box("legF" + tag, (0.06, 0.06, 0.74), (x + dx, y - 0.22, 0.37), M["black"], 0.008))
+        parts.append(box("legB" + tag, (0.06, 0.06, 0.74), (x + dx, y + 0.92, 0.37), M["black"], 0.008))
+        parts.append(box("legT" + tag, (0.06, 1.2, 0.05), (x + dx, y + 0.35, 0.72), M["black"], 0.008))
+        parts.append(box("legS" + tag, (0.06, 1.2, 0.05), (x + dx, y + 0.35, 0.02), M["black"], 0.008))
+    parts.append(box("tray" + tag, (2.0, 0.16, 0.08), (x, y + 0.86, 0.66), M["black"], 0.01))       # cable tray
+    # an ultrawide monitor on an arm
+    parts.append(box("clamp" + tag, (0.12, 0.1, 0.1), (x, y + 0.96, 0.84), M["frame"], 0.01))
+    parts.append(cyl("pole" + tag, 0.025, 0.55, (x, y + 0.96, 1.12), M["frame"]))
+    parts.append(box("arm" + tag, (0.06, 0.12, 0.05), (x, y + 0.92, 1.38), M["frame"], 0.01))
+    mon = box("monitor" + tag, (2.02, 0.05, 0.86), (x, y + 0.88, 1.62), M["black"], 0.018)
     parts.append(mon)
-    scr = box("screen" + tag, (1.38, 0.01, 0.78), (x, y + 0.775, 1.62), M["screen"], 0)
+    scr = box("screen" + tag, (1.96, 0.006, 0.8), (x, y + 0.853, 1.62), M["screen"], 0)
     parts.append(scr)
-    parts.append(box("kbd" + tag, (0.8, 0.26, 0.03), (x, y + 0.1, 0.835), M["trim"], 0.01))
-    parts.append(box("mouse" + tag, (0.08, 0.13, 0.03), (x + 0.6, y + 0.12, 0.835), M["trim"], 0.01))
-    parts.append(cyl("mug" + tag, 0.07, 0.14, (x - 0.95, y + 0.55, 0.89), M["pot"]))
+    # keyboard with keys, a mouse on a pad, a ceramic mug, a phone, headphones on a stand
+    parts.append(box("kbd" + tag, (0.84, 0.26, 0.022), (x, y + 0.1, 0.80), M["frame"], 0.008))
+    for r in range(4):
+        parts.append(box("keys" + tag, (0.78, 0.045, 0.012), (x, y + 0.01 + r * 0.06, 0.815), M["trim"], 0.004))
+    parts.append(box("pad" + tag, (0.36, 0.28, 0.004), (x + 0.68, y + 0.12, 0.79), M["carpet"], 0.002))
+    parts.append(soft("mouse" + tag, (0.07, 0.12, 0.035), (x + 0.68, y + 0.12, 0.81), M["black"]))
+    parts.append(cyl("mug" + tag, 0.055, 0.12, (x - 1.0, y + 0.5, 0.85), M["ceramic"]))
+    parts.append(box("phone" + tag, (0.08, 0.16, 0.01), (x - 0.72, y + 0.12, 0.795), M["black"], 0.006, rot=(0, 0, math.radians(12))))
+    parts.append(box("notebook" + tag, (0.3, 0.22, 0.02), (x + 1.0, y + 0.55, 0.8), M["woodDark"], 0.004, rot=(0, 0, math.radians(-8))))
     return parts, scr
 
 def chair(x, y, tag=""):
     p = []
-    p.append(box("seat" + tag, (0.62, 0.58, 0.1), (x, y - 0.55, 0.52), M["chair"], 0.05))
-    p.append(box("back" + tag, (0.62, 0.1, 0.7), (x, y - 0.86, 0.95), M["chair"], 0.05, rot=(math.radians(-8), 0, 0)))
-    p.append(cyl("post" + tag, 0.04, 0.4, (x, y - 0.55, 0.28), M["steel"]))
+    p.append(soft("seat" + tag, (0.6, 0.56, 0.12), (x, y - 0.55, 0.5), M["chair"], level=2, bevel=0.45))
+    back = soft("back" + tag, (0.56, 0.08, 0.78), (x, y - 0.88, 1.02), M["mesh"], rot=(math.radians(-10), 0, 0), level=2, bevel=0.45)
+    p.append(back)
+    p.append(soft("head" + tag, (0.36, 0.08, 0.16), (x, y - 0.95, 1.5), M["chair"], rot=(math.radians(-10), 0, 0)))
+    for side in (-1, 1):
+        p.append(box("armPost" + tag, (0.04, 0.04, 0.2), (x + side * 0.33, y - 0.55, 0.62), M["black"], 0.01))
+        p.append(soft("armPad" + tag, (0.07, 0.28, 0.03), (x + side * 0.33, y - 0.52, 0.73), M["chair"]))
+    p.append(cyl("post" + tag, 0.035, 0.36, (x, y - 0.55, 0.27), M["steel"]))
     for a in range(5):
         t = a * 2 * math.pi / 5
-        p.append(box("spoke" + tag, (0.36, 0.05, 0.04), (x + 0.18 * math.cos(t), y - 0.55 + 0.18 * math.sin(t), 0.07), M["black"], 0.01, rot=(0, 0, t)))
+        p.append(box("spoke" + tag, (0.34, 0.05, 0.035), (x + 0.17 * math.cos(t), y - 0.55 + 0.17 * math.sin(t), 0.08), M["black"], 0.01, rot=(0, 0, t)))
+        p.append(sphere("wheel" + tag, 0.035, (x + 0.33 * math.cos(t), y - 0.55 + 0.33 * math.sin(t), 0.035), M["rubber"]))
     return p
 
-LOOKS = [  # shirt, hair, skin, trousers
-    ("#e8e2d6", "#2a211c", "#e9b896", "#2b2f3a"), ("#3b6e8f", "#7a4a2a", "#c98e64", "#23262e"),
-    ("#4ade80", "#111111", "#8d5a3b", "#1f2229"), ("#c0504d", "#d8b47a", "#f1c8a8", "#2b2f3a"),
-    ("#2f3542", "#5a3a24", "#e2a882", "#1b1d23"), ("#e3b04b", "#1a1a1a", "#b9785a", "#2b2f3a"),
-    ("#7b5fb5", "#a33b2b", "#f0c19e", "#23262e"), ("#f2f2f2", "#9a9a9a", "#d79f7b", "#3a3f4a"),
+LOOKS = [  # hoodie, hair, skin, trousers, headset
+    ("#3a4150", "#1d1612", "#e9b896", "#1d2027", "#0f1013"), ("#2c5282", "#5a3a22", "#c98e64", "#202329", "#e7e3db"),
+    ("#e8e1d4", "#111111", "#8d5a3b", "#24272e", "#0f1013"), ("#5b2b30", "#c9a46a", "#f1c8a8", "#1d2027", "#0f1013"),
+    ("#3f4a3a", "#3a2618", "#e2a882", "#191b20", "#c9a15a"), ("#c26a2c", "#1a1a1a", "#b9785a", "#1d2027", "#0f1013"),
+    ("#4a3f6b", "#8f2f22", "#f0c19e", "#202329", "#e7e3db"), ("#7d8794", "#9a9a9a", "#d79f7b", "#2a2e36", "#0f1013"),
 ]
 
 def limb(a, b, r, m):
     a, b = Vector(a), Vector(b); d = b - a
-    bpy.ops.mesh.primitive_cylinder_add(radius=r, depth=max(0.01, d.length), location=(a + b) / 2)
+    bpy.ops.mesh.primitive_cylinder_add(radius=r, depth=max(0.01, d.length), location=(a + b) / 2, vertices=24)
     o = bpy.context.active_object; o.rotation_mode = "QUATERNION"; o.rotation_quaternion = Vector((0, 0, 1)).rotation_difference(d)
-    o.data.materials.append(m); bpy.ops.object.shade_smooth(); return o
+    o.data.materials.append(m); bpy.ops.object.shade_smooth()
+    return o
 
 def look_mats(look):
-    shirt, hair, skin, pants = [srgb(c) for c in LOOKS[look % len(LOOKS)]]
-    return (mat("shirt%d" % look, shirt, 0.8), mat("hair%d" % look, hair, 0.6), mat("skin%d" % look, skin, 0.55), mat("pants%d" % look, pants, 0.8))
+    hood, hair, skin, pants, hs = [srgb(c) for c in LOOKS[look % len(LOOKS)]]
+    return (shader("hoodie%d" % look, hood, 0.92, noise=0.25, nscale=380, bump=0.25),
+            shader("hair%d" % look, hair, 0.55, noise=0.4, nscale=900, bump=0.3),
+            shader("skin%d" % look, skin, 0.5, sss=0.18),
+            shader("pants%d" % look, pants, 0.85, noise=0.2, nscale=400, bump=0.2),
+            shader("hs%d" % look, hs, 0.3, coat=0.5))
+
+def head_parts(x, hy, hz, look, mk, mh, mhs, facing=1):
+    # a head with hair, an over-ear headset and its mic boom
+    p = [sphere("head", 0.19, (x, hy, hz), mk, (1, 1, 1.06))]
+    p.append(sphere("hair", 0.2, (x, hy - 0.035 * facing, hz + 0.045), mh, (1.02, 1.02, 0.9)))
+    if look % 3 == 1: p.append(sphere("bun", 0.08, (x, hy - 0.17 * facing, hz + 0.12), mh))
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.215, minor_radius=0.022, location=(x, hy, hz + 0.02), rotation=(math.radians(90), 0, math.radians(90)))
+    band = bpy.context.active_object; band.data.materials.append(mhs); bpy.ops.object.shade_smooth()
+    bm = band.modifiers.new("cut", "BOOLEAN")
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(x, hy, hz - 0.25)); cutter = bpy.context.active_object; cutter.scale = (0.6, 0.6, 0.5)
+    bm.object = cutter; bpy.context.view_layer.objects.active = band; bpy.ops.object.modifier_apply(modifier="cut"); bpy.data.objects.remove(cutter)
+    p.append(band)
+    for side in (-1, 1):
+        p.append(cyl("cup", 0.085, 0.07, (x + side * 0.2, hy, hz - 0.01), mhs, rot=(0, math.radians(90), 0)))
+    p.append(limb((x - 0.22, hy, hz - 0.04), (x - 0.12, hy + 0.15 * facing, hz - 0.13), 0.012, mhs))
+    return p
 
 def agent(x, y, look, phase, pose="type"):
-    ms, mh, mk, mp = look_mats(look)
+    mh_, mhair, mk, mp, mhs = look_mats(look)
     w = math.sin(phase * 2 * math.pi)
     bob = 0.012 * w if pose == "type" else (0.05 * abs(w) if pose == "cheer" else -0.03)
     sy = y - 0.6
-    hz, hy = 1.36 + bob, sy + 0.04
-    if pose == "slump": hz, hy = 1.27, sy + 0.16
+    hz, hy = 1.38 + bob, sy + 0.05
+    if pose == "slump": hz, hy = 1.28, sy + 0.17
     p = []
-    p.append(box("torso", (0.52, 0.3, 0.55), (x, sy + (0.05 if pose == "slump" else 0), 0.92 + bob), ms, 0.12))
-    p.append(sphere("head", 0.2, (x, hy, hz), mk))
-    p.append(sphere("hair", 0.215, (x, hy - 0.06, hz + 0.04), mh, (1, 1, 0.92)))
+    p.append(soft("torso", (0.5, 0.3, 0.56), (x, sy + (0.05 if pose == "slump" else 0), 0.93 + bob), mh_, level=2, bevel=0.42))
+    p.append(soft("hood", (0.36, 0.14, 0.16), (x, sy - 0.13, 1.17 + bob), mh_, rot=(math.radians(18), 0, 0)))   # the hood, down on the back
+    p.append(soft("pocket", (0.3, 0.04, 0.12), (x, sy + 0.15, 0.8 + bob), mh_))
+    p.append(cyl("neck", 0.07, 0.12, (x, hy, hz - 0.21), mk))
+    p += head_parts(x, hy, hz, look, mk, mhair, mhs)
     for side in (-1, 1):
-        p.append(box("thigh", (0.18, 0.5, 0.16), (x + side * 0.13, sy + 0.25, 0.62), mp, 0.06))
-        p.append(box("shin", (0.15, 0.15, 0.5), (x + side * 0.13, sy + 0.5, 0.36), mp, 0.05))
-        sh = Vector((x + side * 0.3, sy + 0.02, 1.08 + bob))
+        p.append(soft("thigh", (0.19, 0.5, 0.17), (x + side * 0.13, sy + 0.25, 0.6), mp, level=1))
+        p.append(soft("shin", (0.15, 0.15, 0.48), (x + side * 0.13, sy + 0.5, 0.34), mp, level=1))
+        p.append(soft("shoe", (0.15, 0.26, 0.09), (x + side * 0.13, sy + 0.56, 0.06), M["white"], level=2))
+        sh = Vector((x + side * 0.28, sy + 0.02, 1.1 + bob))
         if pose == "cheer":
-            hand = Vector((x + side * (0.38 + 0.04 * w), sy + 0.02, 1.78 + bob + 0.05 * abs(w)))
+            hand = Vector((x + side * (0.38 + 0.04 * w), sy + 0.02, 1.8 + bob + 0.05 * abs(w)))
         elif pose == "slump":
             hand = Vector((x + side * 0.2, sy + 0.32, 0.74))
         else:
             tap = 0.025 * max(0, math.sin((phase + (0 if side < 0 else 0.5)) * 2 * math.pi))
-            hand = Vector((x + side * 0.22, y + 0.06, 0.88 + tap))
-        p.append(limb(sh, hand, 0.07, ms))
-        p.append(sphere("hand", 0.07, tuple(hand), mk))
+            hand = Vector((x + side * 0.22, y + 0.06, 0.86 + tap))
+        el = sh + (hand - sh) * 0.5 + Vector((side * 0.06, -0.08, -0.08))
+        p.append(limb(sh, el, 0.075, mh_)); p.append(sphere("elbow", 0.075, tuple(el), mh_))
+        p.append(limb(el, hand, 0.068, mh_)); p.append(sphere("cuff", 0.07, tuple(hand + (el - hand).normalized() * 0.05), mh_))
+        p.append(sphere("hand", 0.058, tuple(hand), mk, (1, 1.2, 0.8)))
     piv = Vector((x, sy, 0.45))
     for o in p:
         o.scale = o.scale * 1.22; o.location = piv + (o.location - piv) * 1.22
@@ -171,22 +306,23 @@ def agent(x, y, look, phase, pose="type"):
 
 def walker(x, y, look, phase, heading):
     """A colleague walking, built facing +y and turned to `heading` (radians about z)."""
-    ms, mh, mk, mp = look_mats(look)
+    mh_, mhair, mk, mp, mhs = look_mats(look)
     sw = math.sin(phase * 2 * math.pi)
     bob = 0.03 * abs(math.cos(phase * 2 * math.pi))
     p = []
-    p.append(box("torso", (0.5, 0.3, 0.62), (x, y, 1.2 + bob), ms, 0.12))
-    p.append(sphere("head", 0.2, (x, y, 1.72 + bob), mk))
-    p.append(sphere("hair", 0.215, (x, y - 0.04, 1.77 + bob), mh, (1, 1, 0.92)))
+    p.append(soft("torso", (0.5, 0.3, 0.64), (x, y, 1.22 + bob), mh_, level=2, bevel=0.42))
+    p.append(soft("hood", (0.36, 0.14, 0.16), (x, y - 0.14, 1.5 + bob), mh_, rot=(math.radians(18), 0, 0)))
+    p.append(cyl("neck", 0.07, 0.12, (x, y, 1.6 + bob), mk))
+    p += head_parts(x, y, 1.76 + bob, look, mk, mhair, mhs)
     for side in (-1, 1):
-        hip = Vector((x + side * 0.12, y, 0.9 + bob))
-        foot = Vector((x + side * 0.12, y + side * 0.28 * sw, 0.08))
-        p.append(limb(hip, foot, 0.085, mp))
-        p.append(box("shoe", (0.14, 0.24, 0.08), (foot.x, foot.y + 0.05, 0.05), M["black"], 0.03))
-        sh = Vector((x + side * 0.31, y, 1.42 + bob))
-        hand = Vector((x + side * 0.36, y - side * 0.22 * sw, 0.95 + bob))
-        p.append(limb(sh, hand, 0.065, ms))
-        p.append(sphere("hand", 0.065, tuple(hand), mk))
+        hip = Vector((x + side * 0.12, y, 0.92 + bob))
+        foot = Vector((x + side * 0.12, y + side * 0.28 * sw, 0.1))
+        p.append(limb(hip, foot, 0.09, mp))
+        p.append(soft("shoe", (0.15, 0.27, 0.1), (foot.x, foot.y + 0.05, 0.05), M["white"], level=2))
+        sh = Vector((x + side * 0.3, y, 1.44 + bob))
+        hand = Vector((x + side * 0.35, y - side * 0.22 * sw, 0.97 + bob))
+        p.append(limb(sh, hand, 0.072, mh_))
+        p.append(sphere("hand", 0.058, tuple(hand), mk, (1, 1.2, 0.8)))
     piv = Vector((x, y, 0))
     from mathutils import Matrix
     rot = Matrix.Rotation(heading, 4, "Z")
@@ -197,77 +333,90 @@ def walker(x, y, look, phase, heading):
     return p
 
 def plant(x, y, s=1.0):
-    cyl("pot", 0.28 * s, 0.5 * s, (x, y, 0.25 * s), M["pot"])
-    for i in range(9):
-        a = i * 2.4
-        sphere("leaf", 0.22 * s, (x + 0.18 * s * math.cos(a), y + 0.18 * s * math.sin(a), (0.75 + 0.12 * (i % 3)) * s), M["plant"], (1, 1, 1.5))
+    # a tall potted plant: a concrete planter and long leaves fanning out
+    cyl("pot", 0.3 * s, 0.6 * s, (x, y, 0.3 * s), M["pot"], verts=48)
+    cyl("soil", 0.27 * s, 0.02, (x, y, 0.6 * s), M["rubber"])
+    random.seed(int(x * 10 + y))
+    for i in range(16):
+        a = i * 2.399 + random.random() * 0.3; tilt = 0.35 + 0.5 * (i % 4) / 3; L = (0.55 + random.random() * 0.45) * s
+        base = Vector((x, y, 0.6 * s)); tip = base + Vector((math.cos(a) * math.sin(tilt), math.sin(a) * math.sin(tilt), math.cos(tilt))) * L * 1.6
+        limb(base + (tip - base) * 0.05, base + (tip - base) * 0.55, 0.008 * s, M["plant"])
+        lf = sphere("leaf", 0.5, tuple(base + (tip - base) * 0.75), M["plant2"] if i % 2 else M["plant"], (0.13 * s, 0.32 * s, 0.03 * s))
+        lf.rotation_mode = "QUATERNION"; lf.rotation_quaternion = Vector((0, 1, 0)).rotation_difference(tip - base)
 
 # ---------------------------------------------------------------- room
 def room():
     box("floor", (W, D, 0.2), (W / 2, D / 2, -0.1), M["floor"], 0)
-    for i in range(1, int(W)):     # plank seams
-        box("seam", (0.015, D, 0.002), (i, D / 2, 0.001), M["floorline"], 0)
-    box("rug", (18.6, 12.6, 0.02), (12.1, 8.3, 0.012), M["rug"], 0.01)
-    # back walls (x=0 and y=D) with a dark base and a trim
-    box("wallL", (0.3, D, H), (-0.15, D / 2, H / 2), M["wall"], 0)
+    for i in range(1, int(W / 2.6) + 1):     # large concrete slabs
+        box("seam", (0.012, D, 0.002), (i * 2.6, D / 2, 0.001), M["floorline"], 0)
+    for j in range(1, int(D / 2.6) + 1):
+        box("seam", (W, 0.012, 0.002), (W / 2, j * 2.6, 0.001), M["floorline"], 0)
+    box("carpet", (18.6, 12.6, 0.02), (12.1, 8.3, 0.012), M["carpet"], 0.01)
+    for (sx, sy_, lx, ly) in [(18.66, 0.03, 12.1, 2.0), (18.66, 0.03, 12.1, 14.6), (0.03, 12.66, 2.8, 8.3), (0.03, 12.66, 21.4, 8.3)]:
+        box("inlay", (sx, sy_, 0.006), (lx, ly, 0.022), M["brass"], 0)
+    # the left wall is glass, floor to ceiling, the city behind it
+    box("sill", (0.4, D, 0.12), (-0.1, D / 2, 0.06), M["trim"], 0)
+    box("head", (0.4, D, 0.14), (-0.1, D / 2, H - 0.07), M["trim"], 0)
+    for i in range(9):
+        box("mullion", (0.1, 0.07, H), (0.02, i * D / 8, H / 2), M["frame"], 0.01)
+    box("pane", (0.02, D, H), (0.0, D / 2, H / 2), M["glass"], 0)
+    random.seed(7)
+    cx = -0.35
+    yy = -0.2
+    while yy < D + 0.2:                       # towers beyond the glass: rooftops below, lit windows
+        bw = 0.7 + random.random() * 1.5; top = 1.2 + random.random() * 4.4
+        d = 0.6 + random.random() * 1.6
+        tx = cx - d / 2 - random.random() * 1.5
+        box("tower", (d, bw - 0.08, top), (tx, yy + bw / 2, top / 2 - 0.02), city_mat("city%d" % int(random.random() * 6), random.random() * 9, random.random() < 0.8), 0)
+        box("roof", (d + 0.04, bw - 0.04, 0.06), (tx, yy + bw / 2, top), shader("roof", srgb("#10131a"), 0.8), 0)
+        if random.random() < 0.4: box("beacon", (0.06, 0.06, 0.06), (cx - 0.3, yy + bw / 2, top + 0.02), shader("beacon", srgb("#ff3b30"), 0.4, emit=srgb("#ff3b30"), strength=12), 0)
+        yy += bw
+    box("ground", (40, D + 20, 0.1), (-20.5, D / 2, -0.06), shader("street", srgb("#06080d"), 0.9), 0)
+    # the back wall: dark acoustic slats, a thin-bezel LED wall (the Scope), the neon sign, the ticker
+    box("wallL", (0.3, D, H), (-0.45, D / 2, H / 2), M["wall"], 0)   # behind the city, only fills gaps
     box("wallB", (W, 0.3, H), (W / 2, D + 0.15, H / 2), M["wall"], 0)
-    box("baseL", (0.32, D, 0.25), (-0.12, D / 2, 0.125), M["trim"], 0)
-    box("baseB", (W, 0.32, 0.25), (W / 2, D + 0.12, 0.125), M["trim"], 0)
-    # windows on the left wall: the city at night
-    for i in range(4):
-        cy = 2.5 + i * 4.2
-        box("winframe", (0.12, 3.2, 2.8), (0.02, cy, 2.6), M["trim"], 0.02)
-        box("night", (0.05, 3.0, 2.6), (0.1, cy, 2.6), M["city"], 0)
-        random.seed(i)
-        bx = cy - 1.45
-        while bx < cy + 1.4:              # a skyline: towers with lit window grids
-            bw = 0.35 + random.random() * 0.5; bw = min(bw, cy + 1.45 - bx)
-            top = 1.6 + random.random() * 2.2
-            box("tower", (0.02, bw - 0.04, top - 1.3), (0.125, bx + bw / 2, 1.3 + (top - 1.3) / 2), M["tower"], 0)
-            for wy in [bx + 0.08 + j * 0.11 for j in range(int((bw - 0.1) / 0.11))]:
-                for wz in [1.45 + j * 0.16 for j in range(int((top - 1.55) / 0.16))]:
-                    if random.random() < 0.38:
-                        box("lit", (0.02, 0.05, 0.07), (0.14, wy, wz), M["warm"] if random.random() < 0.85 else M["green"], 0)
-            bx += bw
-        box("mullion", (0.06, 0.05, 2.6), (0.12, cy, 2.6), M["trim"], 0)
-    # the Scope wall on the back wall: a big screen for live launches
-    box("scopeFrame", (9.2, 0.2, 3.3), (15.5, D - 0.02, 2.75), M["black"], 0.05)
-    scope = box("scope", (8.8, 0.02, 2.95), (15.5, D - 0.13, 2.75), M["screen"], 0)
-    box("scopeLed", (8.9, 0.05, 0.04), (15.5, D - 0.15, 1.08), M["green"], 0)
-    # launch kiosk by the right edge: the anti-vamp gate
+    for i in range(int(W / 0.16)):
+        if 10.6 < i * 0.16 < 20.4: continue      # the LED wall goes there
+        box("slatB", (0.09, 0.05, H - 0.4), (0.08 + i * 0.16, D - 0.02, H / 2 + 0.1), M["slat"], 0.004)
+    box("baseB", (W, 0.1, 0.12), (W / 2, D - 0.06, 0.06), M["trim"], 0)
+    box("scopeFrame", (9.3, 0.16, 3.4), (15.5, D - 0.04, 2.75), M["frame"], 0.02)
+    scope = box("scope", (9.1, 0.02, 3.2), (15.5, D - 0.13, 2.75), M["screen"], 0)
+    box("scopeLed", (9.3, 0.04, 0.025), (15.5, D - 0.14, 1.03), M["led"], 0)
+    # the launch kiosk and its gate, by the right edge
     box("kiosk", (1.2, 0.8, 1.1), (23.4, 15.2, 0.55), M["black"], 0.06)
+    box("kioskTop", (1.24, 0.84, 0.03), (23.4, 15.2, 1.115), M["wood"], 0.01)
     kscr = box("kioskScreen", (1.0, 0.02, 0.62), (23.4, 14.79, 1.45), M["screen"], 0, rot=(math.radians(-14), 0, 0))
-    box("kioskPost", (0.1, 0.1, 0.5), (23.4, 15.0, 1.1), M["steel"], 0.01)
+    box("kioskPost", (0.1, 0.1, 0.5), (23.4, 15.0, 1.1), M["frame"], 0.01)
     for gx in (21.6, 25.2):
-        box("gate", (0.18, 0.18, 2.4), (gx, 13.6, 1.2), M["steel"], 0.04)
-        box("gateLed", (0.05, 0.05, 2.2), (gx - 0.1 if gx > 23 else gx + 0.1, 13.6, 1.2), M["green"], 0)
-    box("gateTop", (3.8, 0.18, 0.18), (23.4, 13.6, 2.45), M["steel"], 0.04)
-    # coffee corner and plants
-    box("counter", (3.6, 0.8, 1.0), (3.2, D - 0.6, 0.5), M["woodDark"], 0.04)
-    box("counterTop", (3.7, 0.85, 0.06), (3.2, D - 0.6, 1.03), M["steel"], 0.01)
+        box("gate", (0.16, 0.16, 2.4), (gx, 13.6, 1.2), M["frame"], 0.02)
+        box("gateLed", (0.03, 0.04, 2.2), (gx - 0.09 if gx > 23 else gx + 0.09, 13.6, 1.2), M["green"], 0)
+    box("gateTop", (3.8, 0.16, 0.16), (23.4, 13.6, 2.45), M["frame"], 0.02)
+    # the coffee bar: walnut and steel, stools, a lit drinks fridge
+    box("counter", (3.6, 0.8, 1.0), (3.2, D - 0.6, 0.5), M["woodDark"], 0.02)
+    box("counterTop", (3.7, 0.85, 0.05), (3.2, D - 0.6, 1.025), shader("stone", srgb("#d9d6cf"), 0.2, noise=0.25, nscale=8, coat=0.3), 0.01)
     box("espresso", (0.6, 0.45, 0.55), (2.3, D - 0.65, 1.33), M["steel"], 0.04)
-    box("fridge", (0.9, 0.8, 2.1), (0.7, D - 3.0, 1.05), M["steel"], 0.04)
-    for (px, py, s) in [(1.0, 1.0, 1.1), (24.8, 1.2, 1.0), (8.5, D - 0.8, 1.2), (21.0, D - 0.9, 1.0), (1.0, 9.0, 0.9)]:
-        plant(px, py, s)
-    # ceiling lights are off camera: soft panels over every row
-    for r in range(ROWS):
-        for c in range(COLS):
-            x, y = SEATS[r * COLS + c]
-            l = bpy.data.lights.new("panel", "AREA"); l.size = 2.6; l.energy = 650; l.color = (1.0, 0.92, 0.8)
-            o = bpy.data.objects.new("panel", l); sc.collection.objects.link(o); o.location = (x, y + 0.3, 6.0)
-    # the neon sign on the back wall, left of the Scope
+    box("espTray", (0.5, 0.2, 0.03), (2.3, D - 0.9, 1.08), M["frame"], 0.01)
+    for sx in (2.0, 3.0, 4.0):
+        cyl("stoolPost", 0.03, 0.75, (sx, D - 1.35, 0.38), M["frame"]); cyl("stoolSeat", 0.2, 0.06, (sx, D - 1.35, 0.78), M["chair"], verts=40); cyl("stoolFoot", 0.18, 0.02, (sx, D - 1.35, 0.01), M["frame"], verts=40)
+    box("fridge", (0.9, 0.8, 2.1), (0.7, D - 3.0, 1.05), M["frame"], 0.03)
+    box("fridgeGlass", (0.02, 0.7, 1.8), (1.16, D - 3.0, 1.1), shader("fridgeLit", srgb("#cfe7ff"), 0.2, emit=srgb("#d8ecff"), strength=1.6), 0)
+    for (px_, py, s) in [(1.0, 1.0, 1.15), (24.8, 1.2, 1.05), (8.6, D - 0.8, 1.25), (21.0, D - 0.9, 1.05), (1.0, 9.0, 0.95)]:
+        plant(px_, py, s)
+    for (x, y) in SEATS: seat_light(x, y)
+    # the neon sign on the back wall, on a dark panel
     font = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "BigShouldersDisplay-800.ttf")
-    bpy.ops.object.text_add(location=(6.6, D - 0.06, 3.35), rotation=(math.radians(90), 0, 0))
-    t = bpy.context.active_object; t.data.body = "NIGHTSHIFT"; t.data.align_x = "CENTER"; t.data.size = 1.05; t.data.extrude = 0.03
+    box("signBack", (6.4, 0.06, 1.5), (6.6, D - 0.05, 3.72), M["trim"], 0.03)
+    bpy.ops.object.text_add(location=(6.6, D - 0.1, 3.35), rotation=(math.radians(90), 0, 0))
+    t = bpy.context.active_object; t.data.body = "NIGHTSHIFT"; t.data.align_x = "CENTER"; t.data.size = 1.05; t.data.extrude = 0.02
     if os.path.exists(font): t.data.font = bpy.data.fonts.load(font)
     t.data.materials.append(M["neon"])
-    box("signBack", (6.4, 0.05, 1.5), (6.6, D - 0.02, 3.72), M["trim"], 0.05)
-    nl = bpy.data.lights.new("neonglow", "AREA"); nl.size = 5; nl.energy = 160; nl.color = (1.0, 0.62, 0.25)
+    nl = bpy.data.lights.new("neonglow", "AREA"); nl.size = 5; nl.energy = 260; nl.color = (1.0, 0.55, 0.18)
     no = bpy.data.objects.new("neonglow", nl); sc.collection.objects.link(no); no.location = (6.6, D - 1.2, 3.7); no.rotation_euler = (math.radians(-90), 0, 0)
-    # the ticker strip under the ceiling line and a clock face
+    sl = bpy.data.lights.new("scopeglow", "AREA"); sl.size = 9; sl.size_y = 3; sl.shape = "RECTANGLE"; sl.energy = 220; sl.color = (0.6, 0.8, 1.0)
+    so = bpy.data.objects.new("scopeglow", sl); sc.collection.objects.link(so); so.location = (15.5, D - 0.6, 2.75); so.rotation_euler = (math.radians(-90), 0, 0)
     ticker = box("ticker", (24.0, 0.03, 0.42), (13.0, D - 0.05, 4.82), M["screen"], 0)
-    box("tickerFrame", (24.2, 0.06, 0.52), (13.0, D - 0.02, 4.82), M["black"], 0.02)
-    cyl("clockRim", 0.55, 0.08, (10.2, D - 0.06, 3.4), M["trim"], rot=(math.radians(90), 0, 0), verts=48)
+    box("tickerFrame", (24.2, 0.06, 0.52), (13.0, D - 0.02, 4.82), M["frame"], 0.01)
+    cyl("clockRim", 0.55, 0.06, (10.2, D - 0.06, 3.4), M["frame"], rot=(math.radians(90), 0, 0), verts=64)
     clock = box("clock", (0.9, 0.01, 0.9), (10.2, D - 0.11, 3.4), M["screen"], 0)
     return scope, kscr, ticker, clock
 
@@ -285,12 +434,13 @@ def camera():
 def lights():
     w = bpy.data.worlds.new("w"); sc.world = w; w.use_nodes = True
     w.node_tree.nodes["Background"].inputs["Color"].default_value = (0.012, 0.016, 0.03, 1)
-    w.node_tree.nodes["Background"].inputs["Strength"].default_value = 3.0
+    w.node_tree.nodes["Background"].inputs["Strength"].default_value = 1.4
     sun = bpy.data.lights.new("moon", "SUN"); sun.energy = 0.35; sun.color = (0.7, 0.8, 1.0); sun.angle = math.radians(8)
     so = bpy.data.objects.new("moon", sun); sc.collection.objects.link(so); so.rotation_euler = (math.radians(55), 0, math.radians(-40))
-    fill = bpy.data.lights.new("fill", "AREA"); fill.size = 20; fill.energy = 1800; fill.color = (0.85, 0.9, 1.0)
+    fill = bpy.data.lights.new("fill", "AREA"); fill.size = 20; fill.energy = 700; fill.color = (0.75, 0.82, 1.0)
     fo = bpy.data.objects.new("fill", fill); sc.collection.objects.link(fo); fo.location = (W / 2 + 10, -8, 14)
     fo.rotation_euler = (Vector((W / 2, D / 2, 0)) - fo.location).to_track_quat("-Z", "Y").to_euler()
+    if MODE not in ("room", "anchors", "walk"): seat_light(*REF)
 
 def setup_render(transparent):
     sc.render.engine = "CYCLES"
